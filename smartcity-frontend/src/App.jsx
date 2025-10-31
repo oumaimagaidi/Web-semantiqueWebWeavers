@@ -15,6 +15,7 @@ import TicketsPage from "./pages/TicketsPage";
 import SmartCitiesPage from "./pages/SmartCitiesPage";
 import TrajetsPage from "./pages/TrajetsPage";
 import Statistiques from "./pages/StatistiquesPage";
+import Profile from "./pages/Profile";
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="trajetspage" element={<TrajetsPage />} />
           <Route path="statistiques" element={<Statistiques />} />
           <Route path="ai" element={<AIQuery />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
 
         {/* Redirection par défaut */}

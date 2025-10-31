@@ -31,7 +31,6 @@ export default function Layout() {
       setUser(JSON.parse(userData));
       setLoading(false);
     } else {
-      // Rediriger vers la page de connexion si non connecté
       console.log("Utilisateur non connecté, redirection vers /signin");
       navigate("/signin", { replace: true });
       setLoading(false);
@@ -49,7 +48,6 @@ export default function Layout() {
     return location.pathname === path;
   };
 
-  // Afficher un loader pendant la vérification
   if (loading) {
     return (
       <div style={loadingStyles.container}>
@@ -59,7 +57,6 @@ export default function Layout() {
     );
   }
 
-  // Si l'utilisateur n'est pas connecté, ne pas afficher le layout
   if (!user) {
     return null;
   }
@@ -102,7 +99,17 @@ export default function Layout() {
         <div style={styles.sidebarFooter}>
           {user && (
             <div style={styles.userInfoSidebar}>
-              <div style={styles.userAvatarSidebar}>👤</div>
+              <div style={styles.userAvatarSidebar}>
+                {user.profileImage ? (
+                  <img 
+                    src={user.profileImage} 
+                    alt="Profile" 
+                    style={styles.avatarImageSidebar}
+                  />
+                ) : (
+                  <span style={styles.avatarIconSidebar}>👤</span>
+                )}
+              </div>
               <div style={styles.userDetailsSidebar}>
                 <div style={styles.userNameSidebar}>{user.prenom} {user.nom}</div>
                 <div style={styles.userEmailSidebar}>{user.email}</div>
@@ -132,10 +139,22 @@ export default function Layout() {
             {user && (
               <div style={styles.userInfo}>
                 <div style={styles.userAvatar}>
-                  {user.prenom?.charAt(0)}{user.nom?.charAt(0)}
+                  {user.profileImage ? (
+                    <img 
+                      src={user.profileImage} 
+                      alt="Profile" 
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <span style={styles.avatarText}>
+                      {user.prenom?.charAt(0)}{user.nom?.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <div style={styles.userDetails}>
-                  <div style={styles.userName}>{user.prenom} {user.nom}</div>
+                  <Link to="/app/profile" style={styles.userNameLink}>
+                    <div style={styles.userName}>{user.prenom} {user.nom}</div>
+                  </Link>
                   <div style={styles.userRole}>{user.email}</div>
                 </div>
                 <button onClick={handleLogout} style={styles.logoutButtonHeader}>
@@ -251,7 +270,18 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '0.875rem',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    overflow: 'hidden',
+    flexShrink: 0
+  },
+  avatarImageSidebar: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: '50%'
+  },
+  avatarIconSidebar: {
+    fontSize: '1rem'
   },
   userDetailsSidebar: {
     flex: 1,
@@ -334,16 +364,35 @@ const styles = {
     justifyContent: 'center',
     fontSize: '0.875rem',
     fontWeight: 'bold',
-    color: 'white'
+    color: 'white',
+    overflow: 'hidden',
+    flexShrink: 0
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: '50%'
+  },
+  avatarText: {
+    fontSize: '0.875rem',
+    fontWeight: 'bold'
   },
   userDetails: {
     display: 'flex',
     flexDirection: 'column'
   },
+  userNameLink: {
+    textDecoration: 'none',
+    color: 'inherit',
+    cursor: 'pointer',
+    transition: 'color 0.2s'
+  },
   userName: {
     fontSize: '0.875rem',
     fontWeight: '600',
-    color: '#1f2937'
+    color: '#1f2937',
+    transition: 'color 0.2s'
   },
   userRole: {
     fontSize: '0.75rem',
@@ -423,6 +472,10 @@ const mediaQueries = `
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+
+  .user-name-link:hover .user-name {
+    color: #3b82f6;
   }
 
   @media (max-width: 768px) {
