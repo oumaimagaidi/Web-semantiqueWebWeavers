@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Layout from "./pages/Layout";
-
+import SignIn from "./pages/SignIn";
+import SignUp from "./pages/SignUp";
+import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
 import Transports from "./pages/Transports";
@@ -18,7 +20,15 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        {/* Page d'accueil publique */}
+        <Route path="/" element={<Home />} />
+        
+        {/* Pages d'authentification */}
+        <Route path="/signin" element={<SignIn />} />
+        <Route path="/signup" element={<SignUp />} />
+        
+        {/* Application principale avec layout PROTÉGÉ */}
+        <Route path="/app" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="transports" element={<Transports />} />
@@ -32,6 +42,9 @@ export default function App() {
           <Route path="statistiques" element={<Statistiques />} />
           <Route path="ai" element={<AIQuery />} />
         </Route>
+
+        {/* Redirection par défaut */}
+        <Route path="*" element={<Home />} />
       </Routes>
     </Router>
   );

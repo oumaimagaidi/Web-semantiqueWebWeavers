@@ -1,4 +1,5 @@
 # main.py
+import datetime
 from typing import Any
 import re
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
@@ -12,6 +13,7 @@ import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import json
+from datetime import datetime  # Ajoutez cette ligne
 
 # ======================
 # 🔧 CONFIGURATION
@@ -20,7 +22,7 @@ load_dotenv()
 
 # Configuration Ollama
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "codellama:7b"  # ← CHANGÉ ICI
+OLLAMA_MODEL = "llama3:8b"
 
 FUSEKI_BASE = "http://localhost:3030"
 FUSEKI_QUERY_URL = f"{FUSEKI_BASE}/smartcity/sparql"
@@ -184,7 +186,7 @@ def clean_sparql_query(query: str) -> str:
 
 def generate_sparql_with_ollama(user_question: str) -> str:
     """
-    Génère une requête SPARQL en utilisant Ollama avec Codellama:7b
+    Génère une requête SPARQL en utilisant Ollama
     """
     prompt = f"""
 Tu es un expert en RDF et SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL valides.
@@ -243,20 +245,11 @@ INSTRUCTIONS STRICTES :
 5. Utilise obligatoirement le préfixe mobilite:
 6. Pour les hiérarchies, utilise rdfs:subClassOf*
 7. Sois précis dans les relations
-8. Pour les requêtes SELECT, retourne des variables significatives
-9. Pour les requêtes de comptage, utilise COUNT()
-10. Pour les filtres textuels, utilise FILTER(CONTAINS(LCASE(?var), LCASE("term")))
 
-EXEMPLES :
+EXEMPLE :
 Question: "Liste toutes les personnes"
 Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?personne WHERE {{ ?personne a mobilite:Personne . }}
-
-Question: "Trouve les conducteurs avec un permis de catégorie B"
-Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?conducteur ?nom ?prenom WHERE {{ ?conducteur a mobilite:Conducteur ; mobilite:nom ?nom ; mobilite:prenom ?prenom ; mobilite:categoriePermis "B" . }}
-
-Question: "Combien d'avis positifs y a-t-il ?"
-Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT (COUNT(?avis) as ?nombre_avis) WHERE {{ ?avis a mobilite:AvisPositif . }}
-"""
+    """
 
     try:
         response = requests.post(
@@ -268,7 +261,7 @@ Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobi
                 "options": {
                     "temperature": 0.1,
                     "top_p": 0.9,
-                    "num_predict": 1000  # Augmenté pour Codellama
+                    "num_predict": 500
                 }
             },
             timeout=120
@@ -449,20 +442,16 @@ def validate_sparql_query(query: str) -> bool:
         return False
     
     # Vérifier les mots-clés SPARQL essentiels
-    essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'INSERT', 'DELETE', 'CREATE', 'DROP']
+    essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']
     if not any(keyword in query.upper() for keyword in essential_keywords):
         return False
     
-    # Vérifier la présence des accolades pour les patterns
-    if any(keyword in query.upper() for keyword in ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']):
-        if '{' not in query or '}' not in query:
-            return False
-    
-    # Vérifier que le préfixe mobilite est présent
-    if "PREFIX mobilite:" not in query and "mobilite:" in query:
+    # Vérifier la présence des accolades
+    if '{' not in query or '}' not in query:
         return False
     
     return True
+
 # ======================
 # 👤 PERSONNES - ENDPOINTS
 # ======================
@@ -971,6 +960,214 @@ def search_instances(query: str = ""):
         })
     
     return {"results": instances, "count": len(instances)}
+# ======================
+# 🔐 AUTHENTIFICATION - MODÈLES ET ENDPOINTS
+# ======================
+
+class UserSignUp(BaseModel):
+    # Champs obligatoires (comme dans le RDF)
+    nom: str
+    prenom: str
+    age: int
+    email: str
+    telephone: str
+    type_personne: str = "Personne"  # Nouveau champ : Personne, Conducteur, Pieton, Voyageur
+    
+    # Champs optionnels (comme dans le RDF)
+    dateNaissance: str = None
+    genre: str = ""
+    nationalite: str = ""
+    languePreferee: str = "Français"
+    
+    # Champs pour l'authentification (non stockés dans RDF)
+    username: str  # Pour l'authentification uniquement
+    password: str  # Pour l'authentification uniquement
+    
+    # Champs avec valeurs par défaut (comme dans le RDF)
+    niveauAbonnement: str = "Standard"
+    preferencesAccessibilite: str = "Aucune"
+
+class UserSignIn(BaseModel):
+    email: str
+    password: str
+
+# Stockage temporaire des utilisateurs (remplacez par une base de données)
+users_db = {}
+
+@app.post("/auth/signup/")
+def sign_up(user: UserSignUp):
+    """Inscription d'un nouvel utilisateur avec type spécifique"""
+    try:
+        # Vérifier si l'email existe déjà
+        if user.email in users_db:
+            raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+        
+        # Déterminer le type de personne
+        type_personne = user.type_personne.capitalize()
+        valid_types = ["Personne", "Conducteur", "Pieton", "Voyageur"]
+        if type_personne not in valid_types:
+            type_personne = "Personne"  # Valeur par défaut
+        
+        # Créer l'utilisateur dans la base temporaire
+        user_id = f"user_{len(users_db) + 1}"
+        current_time = datetime.now().isoformat()
+        
+        users_db[user.email] = {
+            "id": user_id,
+            "username": user.username,
+            "email": user.email,
+            "password": user.password,
+            "nom": user.nom,
+            "prenom": user.prenom,
+            "age": user.age,
+            "telephone": user.telephone,
+            "type_personne": type_personne,
+            "created_at": current_time
+        }
+
+        # Créer l'utilisateur dans le graphe RDF avec le type spécifique
+        user_uri = MOBILITE[user_id]
+        
+        # Type spécifique (Conducteur, Pieton, Voyageur ou Personne par défaut)
+        g.add((user_uri, RDF.type, MOBILITE[type_personne]))
+        
+        # Propriétés principales
+        g.add((user_uri, MOBILITE.nom, Literal(user.nom, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.prenom, Literal(user.prenom, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.age, Literal(user.age, datatype=XSD.integer)))
+        g.add((user_uri, MOBILITE.email, Literal(user.email, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.telephone, Literal(user.telephone, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.dateInscription, Literal(current_time, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.statutCompte, Literal("Actif", datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.niveauAbonnement, Literal(user.niveauAbonnement, datatype=XSD.string)))
+        g.add((user_uri, MOBILITE.scoreFidelite, Literal(0, datatype=XSD.integer)))
+        g.add((user_uri, MOBILITE.preferencesAccessibilite, Literal(user.preferencesAccessibilite, datatype=XSD.string)))
+        
+        # Propriétés optionnelles
+        if user.dateNaissance:
+            g.add((user_uri, MOBILITE.dateNaissance, Literal(user.dateNaissance, datatype=XSD.string)))
+        if user.genre:
+            g.add((user_uri, MOBILITE.genre, Literal(user.genre, datatype=XSD.string)))
+        if user.nationalite:
+            g.add((user_uri, MOBILITE.nationalite, Literal(user.nationalite, datatype=XSD.string)))
+        if user.languePreferee:
+            g.add((user_uri, MOBILITE.languePreferee, Literal(user.languePreferee, datatype=XSD.string)))
+        
+        g.serialize("mobilite_updated.rdf", format="xml")
+
+        # Synchroniser avec Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        INSERT DATA {{
+            mobilite:{user_id} a mobilite:{type_personne} ;
+                         mobilite:nom "{user.nom}"^^xsd:string ;
+                         mobilite:prenom "{user.prenom}"^^xsd:string ;
+                         mobilite:age "{user.age}"^^xsd:integer ;
+                         mobilite:email "{user.email}"^^xsd:string ;
+                         mobilite:telephone "{user.telephone}"^^xsd:string ;
+                         mobilite:dateInscription "{current_time}"^^xsd:string ;
+                         mobilite:statutCompte "Actif"^^xsd:string ;
+                         mobilite:niveauAbonnement "{user.niveauAbonnement}"^^xsd:string ;
+                         mobilite:scoreFidelite "0"^^xsd:integer ;
+                         mobilite:preferencesAccessibilite "{user.preferencesAccessibilite}"^^xsd:string
+        """
+        
+        # Ajouter les champs conditionnels
+        if user.dateNaissance:
+            insert_query += f' ; mobilite:dateNaissance "{user.dateNaissance}"^^xsd:string'
+        if user.genre:
+            insert_query += f' ; mobilite:genre "{user.genre}"^^xsd:string'
+        if user.nationalite:
+            insert_query += f' ; mobilite:nationalite "{user.nationalite}"^^xsd:string'
+        if user.languePreferee:
+            insert_query += f' ; mobilite:languePreferee "{user.languePreferee}"^^xsd:string'
+        
+        insert_query += " . }"
+        
+        send_to_fuseki(insert_query)
+
+        return {
+            "message": f"✅ {type_personne} créé avec succès dans le système RDF",
+            "user_id": user_id,
+            "type_personne": type_personne,
+            "email": user.email
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'inscription: {str(e)}")
+
+@app.post("/auth/signin/")
+def sign_in(user: UserSignIn):
+    """Connexion d'un utilisateur"""
+    try:
+        # Vérifier si l'utilisateur existe
+        if user.email not in users_db:
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        
+        stored_user = users_db[user.email]
+        
+        # Vérifier le mot de passe (en production, utiliser bcrypt)
+        if stored_user["password"] != user.password:
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        
+        # Générer un token simple (en production, utiliser JWT)
+        token = f"token_{stored_user['id']}_{int(datetime.now().timestamp())}"
+        
+        return {
+            "message": "✅ Connexion réussie",
+            "token": token,
+            "user": {
+                "id": stored_user["id"],
+                "username": stored_user["username"],
+                "email": stored_user["email"],
+                "nom": stored_user["nom"],
+                "prenom": stored_user["prenom"]
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la connexion: {str(e)}")
+
+@app.get("/auth/me/")
+def get_current_user(token: str):
+    """Récupérer les informations de l'utilisateur connecté"""
+    try:
+        # Vérifier le token (simplifié)
+        if not token.startswith("token_"):
+            raise HTTPException(status_code=401, detail="Token invalide")
+        
+        # Extraire l'ID utilisateur du token
+        user_id = token.split("_")[1]
+        
+        # Trouver l'utilisateur
+        user_data = None
+        for email, user in users_db.items():
+            if user["id"] == user_id:
+                user_data = user
+                break
+        
+        if not user_data:
+            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+        
+        return {
+            "user": {
+                "id": user_data["id"],
+                "username": user_data["username"],
+                "email": user_data["email"],
+                "nom": user_data["nom"],
+                "prenom": user_data["prenom"],
+                "age": user_data["age"],
+                "telephone": user_data["telephone"]
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la récupération: {str(e)}")
 
 # ======================
 # 🏠 ENDPOINT RACINE
@@ -979,525 +1176,7 @@ def search_instances(query: str = ""):
 @app.get("/")
 def home():
     return {"message": "🚀 Bienvenue dans l'API SmartCity Mobility RDF + Fuseki + Ollama"}
-# ======================
-# 🆕 ENDPOINTS MANQUANTS POUR LE FRONTEND
-# ======================
 
-# Endpoint pour les infrastructures (compatible frontend)
-@app.get("/infrastructures/")
-def get_infrastructures():
-    """Récupère toutes les infrastructures"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT DISTINCT ?id ?type ?nom ?adresse WHERE {{
-        ?id a ?type ;
-            mobilite:nom ?nom .
-        OPTIONAL {{ ?id mobilite:adresse ?adresse . }}
-        ?type rdfs:subClassOf* mobilite:Infrastructure .
-        FILTER(?type != mobilite:Infrastructure)
-    }}
-    """)
-    results = sparql.query().convert()
-
-    infrastructures = []
-    seen = set()
-
-    for r in results["results"]["bindings"]:
-        iid = r["id"]["value"]
-        if iid not in seen:
-            seen.add(iid)
-            infrastructures.append({
-                "id": iid.split("#")[-1],
-                "type": r["type"]["value"].split("#")[-1],
-                "nom": r["nom"]["value"],
-                "adresse": r.get("adresse", {}).get("value", "")
-            })
-
-    return infrastructures
-
-# Endpoint pour les trajets (compatible frontend)
-@app.get("/trajets/")
-def get_trajets():
-    """Récupère tous les trajets"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?trajet ?type ?distance ?duree ?personne WHERE {{
-        ?trajet a ?type .
-        ?type rdfs:subClassOf* mobilite:Trajet .
-        OPTIONAL {{ ?trajet mobilite:distance ?distance . }}
-        OPTIONAL {{ ?trajet mobilite:duree ?duree . }}
-        OPTIONAL {{ ?personne mobilite:effectueTrajet ?trajet . }}
-    }}
-    """)
-    results = sparql.query().convert()
-
-    trajets = []
-    for r in results["results"]["bindings"]:
-        trajets.append({
-            "id": r["trajet"]["value"].split("#")[-1],
-            "type": r["type"]["value"].split("#")[-1],
-            "distance": float(r["distance"]["value"]) if "distance" in r else None,
-            "duree": float(r["duree"]["value"]) if "duree" in r else None,
-            "personne": r["personne"]["value"].split("#")[-1] if "personne" in r else None
-        })
-    return trajets
-
-# Endpoint pour les avis (compatible frontend)
-@app.get("/avis/")
-def get_avis():
-    """Récupère tous les avis"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    SELECT ?avis ?commentaire ?note ?utilisateur WHERE {{
-        ?avis a mobilite:Avis ;
-              mobilite:donneAvis ?utilisateur ;
-              mobilite:commentaire ?commentaire ;
-              mobilite:note ?note .
-    }}
-    """)
-    results = sparql.query().convert()
-
-    return [
-        {
-            "avis": r["avis"]["value"].split("#")[-1],
-            "commentaire": r["commentaire"]["value"],
-            "note": int(r["note"]["value"]),
-            "utilisateur": r["utilisateur"]["value"].split("#")[-1],
-        }
-        for r in results["results"]["bindings"]
-    ]
-
-# Endpoint pour les réseaux de transport (alias de vehicules)
-@app.get("/reseaux_transport/")
-def get_reseaux_transport():
-    """Endpoint pour le frontend - alias de get_all_vehicules()"""
-    return get_all_vehicules()
-
-# Endpoint pour les événements (alias de trajets)
-@app.get("/events/")
-def get_events():
-    """Endpoint pour le frontend - alias de get_trajets()"""
-    return get_trajets()
-
-# Endpoint compatible avec l'ancien nom
-@app.get("/get_infrastructures/")
-def get_infrastructures_old():
-    """Endpoint compatible avec l'ancien nom"""
-    return get_infrastructures()
-
-# Endpoint pour les stations de recharge
-@app.get("/stations_recharge/")
-def get_stations_recharge():
-    """Récupère toutes les stations de recharge"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?station ?type ?connecteur ?puissance ?disponible WHERE {{
-        ?station a ?type .
-        ?type rdfs:subClassOf* mobilite:StationRecharge .
-        OPTIONAL {{ ?station mobilite:typeConnecteur ?connecteur . }}
-        OPTIONAL {{ ?station mobilite:puissanceMax ?puissance . }}
-        OPTIONAL {{ ?station mobilite:disponible ?disponible . }}
-    }}
-    """)
-    results = sparql.query().convert()
-
-    stations = []
-    for r in results["results"]["bindings"]:
-        stations.append({
-            "id": r["station"]["value"].split("#")[-1],
-            "type": r["type"]["value"].split("#")[-1],
-            "connecteur": r.get("connecteur", {}).get("value", ""),
-            "puissance": float(r["puissance"]["value"]) if "puissance" in r else None,
-            "disponible": r.get("disponible", {}).get("value", "true") == "true"
-        })
-    return stations
-
-# Endpoint pour les tickets
-@app.get("/tickets/")
-def get_tickets():
-    """Récupère tous les tickets"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?ticket ?type ?prix ?statut ?utilisateur WHERE {{
-        ?ticket a ?type .
-        ?type rdfs:subClassOf* mobilite:Ticket .
-        OPTIONAL {{ ?ticket mobilite:prix ?prix . }}
-        OPTIONAL {{ ?ticket mobilite:statutTicket ?statut . }}
-        OPTIONAL {{ ?utilisateur mobilite:possedeTicket ?ticket . }}
-    }}
-    """)
-    results = sparql.query().convert()
-
-    tickets = []
-    for r in results["results"]["bindings"]:
-        tickets.append({
-            "id": r["ticket"]["value"].split("#")[-1],
-            "type": r["type"]["value"].split("#")[-1],
-            "prix": float(r["prix"]["value"]) if "prix" in r else None,
-            "statut": r.get("statut", {}).get("value", ""),
-            "utilisateur": r["utilisateur"]["value"].split("#")[-1] if "utilisateur" in r else None
-        })
-    return tickets
-
-# Endpoint pour les smart cities
-@app.get("/smartcities/")
-def get_smartcities():
-    """Récupère toutes les smart cities"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    SELECT ?city ?nom WHERE {{
-        ?city a mobilite:SmartCity ;
-              mobilite:nom ?nom .
-    }}
-    """)
-    results = sparql.query().convert()
-
-    return [
-        {
-            "id": r["city"]["value"].split("#")[-1],
-            "nom": r["nom"]["value"]
-        }
-        for r in results["results"]["bindings"]
-    ]
-
-# Endpoint pour les statistiques détaillées
-@app.get("/statistiques/")
-def get_statistiques():
-    """Récupère les statistiques détaillées"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?stat ?type ?valeur ?unite WHERE {{
-        ?stat a ?type .
-        ?type rdfs:subClassOf* mobilite:Statistiques .
-        OPTIONAL {{ ?stat mobilite:valeur ?valeur . }}
-        OPTIONAL {{ ?stat mobilite:unite ?unite . }}
-    }}
-    """)
-    results = sparql.query().convert()
-
-    statistiques = []
-    for r in results["results"]["bindings"]:
-        statistiques.append({
-            "id": r["stat"]["value"].split("#")[-1],
-            "type": r["type"]["value"].split("#")[-1],
-            "valeur": float(r["valeur"]["value"]) if "valeur" in r else None,
-            "unite": r.get("unite", {}).get("value", "")
-        })
-    return statistiques
-
-# Endpoint pour les observations (alias de avis)
-@app.get("/observations/")
-def get_observations():
-    """Endpoint pour le frontend - alias de get_avis()"""
-    return get_avis()
-
-# Endpoint pour les relations de recharge
-@app.get("/reseaux/seRecharge")
-def get_relations_recharge():
-    """Récupère les relations de recharge"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    SELECT ?reseau ?station WHERE {{
-        ?reseau mobilite:utiliseStationRecharge ?station .
-    }}
-    """)
-    results = sparql.query().convert()
-
-    relations = []
-    for r in results["results"]["bindings"]:
-        relations.append({
-            "reseau": r["reseau"]["value"].split("#")[-1],
-            "station": r["station"]["value"].split("#")[-1]
-        })
-    return relations
-
-# Endpoint pour les trajets par utilisateur
-@app.get("/utilisateurs/trajets/")
-def get_trajets_utilisateurs():
-    """Récupère les trajets par utilisateur"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    SELECT ?utilisateur ?trajet ?typeTrajet ?distance ?duree WHERE {{
-        ?utilisateur mobilite:effectueTrajet ?trajet .
-        ?trajet a ?typeTrajet .
-        OPTIONAL {{ ?trajet mobilite:distance ?distance . }}
-        OPTIONAL {{ ?trajet mobilite:duree ?duree . }}
-    }}
-    """)
-    results = sparql.query().convert()
-
-    trajets_utilisateurs = []
-    for r in results["results"]["bindings"]:
-        trajets_utilisateurs.append({
-            "utilisateur": r["utilisateur"]["value"].split("#")[-1],
-            "trajet": r["trajet"]["value"].split("#")[-1],
-            "typeTrajet": r["typeTrajet"]["value"].split("#")[-1],
-            "distance": float(r["distance"]["value"]) if "distance" in r else None,
-            "duree": float(r["duree"]["value"]) if "duree" in r else None
-        })
-    return trajets_utilisateurs
-# ======================
-# 📝 AVIS - ENDPOINTS GET
-# ======================
-
-@app.get("/avis/")
-def get_avis():
-    """Récupère tous les avis avec leurs détails complets"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?avis ?type ?commentaire ?note ?utilisateur ?nom_utilisateur WHERE {{
-        ?avis a ?type .
-        ?type rdfs:subClassOf* mobilite:Avis .
-        OPTIONAL {{ ?avis mobilite:commentaire ?commentaire . }}
-        OPTIONAL {{ ?avis mobilite:note ?note . }}
-        OPTIONAL {{ 
-            ?utilisateur mobilite:donneAvis ?avis .
-            OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilisateur . }}
-        }}
-    }}
-    ORDER BY DESC(?note)
-    """)
-    results = sparql.query().convert()
-
-    avis_list = []
-    seen = set()
-
-    for r in results["results"]["bindings"]:
-        avis_uri = r["avis"]["value"]
-        if avis_uri not in seen:
-            seen.add(avis_uri)
-            
-            # Déterminer le type d'avis
-            avis_type = r["type"]["value"].split("#")[-1]
-            
-            # Récupérer l'utilisateur
-            utilisateur = None
-            if "utilisateur" in r:
-                utilisateur_uri = r["utilisateur"]["value"]
-                utilisateur = {
-                    "id": utilisateur_uri.split("#")[-1],
-                    "nom": r.get("nom_utilisateur", {}).get("value", "Utilisateur inconnu")
-                }
-            
-            avis_list.append({
-                "id": avis_uri.split("#")[-1],
-                "type": avis_type,
-                "commentaire": r.get("commentaire", {}).get("value", ""),
-                "note": int(r["note"]["value"]) if "note" in r else 0,
-                "utilisateur": utilisateur,
-                "statut": "Positif" if avis_type == "AvisPositif" else "Négatif" if avis_type == "AvisNegatif" else "Neutre"
-            })
-
-    return avis_list
-
-@app.get("/avis/{utilisateur_id}")
-def get_avis_par_utilisateur(utilisateur_id: str):
-    """Récupère tous les avis d'un utilisateur spécifique"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?avis ?type ?commentaire ?note WHERE {{
-        mobilite:{utilisateur_id} mobilite:donneAvis ?avis .
-        ?avis a ?type .
-        ?type rdfs:subClassOf* mobilite:Avis .
-        OPTIONAL {{ ?avis mobilite:commentaire ?commentaire . }}
-        OPTIONAL {{ ?avis mobilite:note ?note . }}
-    }}
-    ORDER BY DESC(?note)
-    """)
-    results = sparql.query().convert()
-
-    avis_utilisateur = []
-    for r in results["results"]["bindings"]:
-        avis_type = r["type"]["value"].split("#")[-1]
-        avis_utilisateur.append({
-            "id": r["avis"]["value"].split("#")[-1],
-            "type": avis_type,
-            "commentaire": r.get("commentaire", {}).get("value", ""),
-            "note": int(r["note"]["value"]) if "note" in r else 0,
-            "statut": "Positif" if avis_type == "AvisPositif" else "Négatif" if avis_type == "AvisNegatif" else "Neutre"
-        })
-
-    return {
-        "utilisateur_id": utilisateur_id,
-        "avis": avis_utilisateur,
-        "count": len(avis_utilisateur)
-    }
-
-@app.get("/avis/statistiques/")
-def get_statistiques_avis():
-    """Récupère les statistiques des avis"""
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?type (COUNT(?avis) as ?count) (AVG(?note) as ?moyenne_note) WHERE {{
-        ?avis a ?type .
-        ?type rdfs:subClassOf* mobilite:Avis .
-        OPTIONAL {{ ?avis mobilite:note ?note . }}
-    }}
-    GROUP BY ?type
-    """)
-    results = sparql.query().convert()
-
-    stats = {}
-    total_avis = 0
-    total_notes = 0
-    count_notes = 0
-
-    for r in results["results"]["bindings"]:
-        avis_type = r["type"]["value"].split("#")[-1]
-        count = int(r["count"]["value"])
-        moyenne = float(r["moyenne_note"]["value"]) if "moyenne_note" in r and r["moyenne_note"]["value"] != "NaN" else 0
-        
-        stats[avis_type] = {
-            "count": count,
-            "moyenne_note": round(moyenne, 2)
-        }
-        
-        total_avis += count
-        if moyenne > 0:
-            total_notes += moyenne
-            count_notes += 1
-
-    # Statistiques globales
-    stats["global"] = {
-        "total_avis": total_avis,
-        "moyenne_generale": round(total_notes / count_notes, 2) if count_notes > 0 else 0,
-        "pourcentage_positifs": round((stats.get("AvisPositif", {}).get("count", 0) / total_avis * 100), 2) if total_avis > 0 else 0
-    }
-
-    return stats
-
-@app.get("/avis/recherche/")
-def rechercher_avis(texte: str = "", note_min: int = None, note_max: int = None, type_avis: str = None):
-    """Recherche des avis avec filtres"""
-    
-    # Construction de la requête SPARQL dynamique
-    filters = []
-    
-    if texte:
-        filters.append(f'FILTER(CONTAINS(LCASE(?commentaire), LCASE("{texte}")))')
-    
-    if note_min is not None:
-        filters.append(f'FILTER(?note >= {note_min})')
-    
-    if note_max is not None:
-        filters.append(f'FILTER(?note <= {note_max})')
-    
-    if type_avis:
-        filters.append(f'FILTER(?type = mobilite:{type_avis})')
-    
-    where_clause = " . ".join([
-        "?avis a ?type",
-        "?type rdfs:subClassOf* mobilite:Avis",
-        "OPTIONAL { ?avis mobilite:commentaire ?commentaire }",
-        "OPTIONAL { ?avis mobilite:note ?note }",
-        "OPTIONAL { ?utilisateur mobilite:donneAvis ?avis }"
-    ])
-    
-    if filters:
-        where_clause += " . " + " . ".join(filters)
-
-    query = f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    SELECT ?avis ?type ?commentaire ?note ?utilisateur WHERE {{
-        {where_clause}
-    }}
-    ORDER BY DESC(?note)
-    LIMIT 100
-    """
-
-    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
-    sparql.setReturnFormat(JSON)
-    sparql.setQuery(query)
-    results = sparql.query().convert()
-
-    avis_trouves = []
-    for r in results["results"]["bindings"]:
-        avis_type = r["type"]["value"].split("#")[-1]
-        avis_trouves.append({
-            "id": r["avis"]["value"].split("#")[-1],
-            "type": avis_type,
-            "commentaire": r.get("commentaire", {}).get("value", ""),
-            "note": int(r["note"]["value"]) if "note" in r else 0,
-            "utilisateur": r["utilisateur"]["value"].split("#")[-1] if "utilisateur" in r else None,
-            "statut": "Positif" if avis_type == "AvisPositif" else "Négatif" if avis_type == "AvisNegatif" else "Neutre"
-        })
-
-    return {
-        "criteres": {
-            "texte": texte,
-            "note_min": note_min,
-            "note_max": note_max,
-            "type_avis": type_avis
-        },
-        "resultats": avis_trouves,
-        "count": len(avis_trouves)
-    }
-# ======================
-# 🆕 ENDPOINTS POST MANQUANTS
-# ======================
-
-@app.post("/add_reseau_transport/")
-def add_reseau_transport(data: dict):
-    """Endpoint pour ajouter un réseau de transport (compatible frontend)"""
-    try:
-        vehicule = Vehicule(
-            id=data.get("id", ""),
-            type_vehicule=data.get("type_reseau", "Bus"),
-            marque=data.get("nom", ""),
-            modele=data.get("type_reseau", "Standard"),
-            immatriculation=""
-        )
-        return add_vehicule(vehicule)
-    except Exception as e:
-        return {"error": f"Erreur lors de l'ajout du réseau: {str(e)}"}
-
-@app.post("/add_event/")
-def add_event(data: dict):
-    """Endpoint pour ajouter un événement (compatible frontend)"""
-    try:
-        trajet = Trajet(
-            id=data.get("id", ""),
-            distance=0.0,
-            duree=0.0,
-            heureDepart="",
-            heureArrivee=""
-        )
-        return add_trajet(trajet)
-    except Exception as e:
-        return {"error": f"Erreur lors de l'ajout de l'événement: {str(e)}"}
 # ======================
 # 🚀 LANCEMENT DE L'APPLICATION
 # ======================
