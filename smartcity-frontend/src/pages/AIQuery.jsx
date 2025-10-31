@@ -9,30 +9,43 @@ export default function AIQuery() {
   const [error, setError] = useState(null);
   const [history, setHistory] = useState([]);
 
-  const ask = async () => {
-    if (!question.trim()) return;
+ // src/pages/AIQuery.jsx - FONCTION ask CORRIGÉE
+const ask = async () => {
+  if (!question.trim()) return;
+  
+  setLoading(true);
+  setError(null);
+  
+  try {
+    // CORRECTION : endpoint /ask/ au lieu de /ask_ia/
+    const res = await axios.post("http://localhost:8000/ask/", { 
+      question: question.trim() 
+    });
     
-    setLoading(true);
-    setError(null);
+    setResult(res.data);
     
-    try {
-      const res = await axios.post("http://localhost:8000/ask_ia/", { question });
-      setResult(res.data);
-      
-      // Ajouter à l'historique
-      setHistory(prev => [{
-        question,
-        result: res.data,
-        timestamp: new Date().toLocaleTimeString()
-      }, ...prev.slice(0, 4)]); // Garder les 5 dernières requêtes
-      
-    } catch (err) {
-      console.error("Erreur lors de la requête IA:", err);
-      setError("Erreur lors de la communication avec l'IA. Vérifiez que le serveur est démarré.");
-    } finally {
-      setLoading(false);
+    // Ajouter à l'historique
+    setHistory(prev => [{
+      question,
+      result: res.data,
+      timestamp: new Date().toLocaleTimeString()
+    }, ...prev.slice(0, 4)]); // Garder les 5 dernières requêtes
+    
+  } catch (err) {
+    console.error("Erreur lors de la requête IA:", err);
+    
+    // Message d'erreur plus détaillé
+    if (err.response) {
+      setError(`Erreur ${err.response.status}: ${err.response.data.detail || 'Erreur serveur'}`);
+    } else if (err.request) {
+      setError("Impossible de contacter le serveur. Vérifiez que le serveur FastAPI est démarré sur le port 8000.");
+    } else {
+      setError("Erreur lors de la configuration de la requête.");
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   const clearHistory = () => {
     setHistory([]);

@@ -20,7 +20,7 @@ load_dotenv()
 
 # Configuration Ollama
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3:8b"
+OLLAMA_MODEL = "codellama:7b"  # ← CHANGÉ ICI
 
 FUSEKI_BASE = "http://localhost:3030"
 FUSEKI_QUERY_URL = f"{FUSEKI_BASE}/smartcity/sparql"
@@ -184,7 +184,7 @@ def clean_sparql_query(query: str) -> str:
 
 def generate_sparql_with_ollama(user_question: str) -> str:
     """
-    Génère une requête SPARQL en utilisant Ollama
+    Génère une requête SPARQL en utilisant Ollama avec Codellama:7b
     """
     prompt = f"""
 Tu es un expert en RDF et SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL valides.
@@ -243,11 +243,20 @@ INSTRUCTIONS STRICTES :
 5. Utilise obligatoirement le préfixe mobilite:
 6. Pour les hiérarchies, utilise rdfs:subClassOf*
 7. Sois précis dans les relations
+8. Pour les requêtes SELECT, retourne des variables significatives
+9. Pour les requêtes de comptage, utilise COUNT()
+10. Pour les filtres textuels, utilise FILTER(CONTAINS(LCASE(?var), LCASE("term")))
 
-EXEMPLE :
+EXEMPLES :
 Question: "Liste toutes les personnes"
 Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?personne WHERE {{ ?personne a mobilite:Personne . }}
-    """
+
+Question: "Trouve les conducteurs avec un permis de catégorie B"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?conducteur ?nom ?prenom WHERE {{ ?conducteur a mobilite:Conducteur ; mobilite:nom ?nom ; mobilite:prenom ?prenom ; mobilite:categoriePermis "B" . }}
+
+Question: "Combien d'avis positifs y a-t-il ?"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT (COUNT(?avis) as ?nombre_avis) WHERE {{ ?avis a mobilite:AvisPositif . }}
+"""
 
     try:
         response = requests.post(
@@ -259,7 +268,7 @@ Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobi
                 "options": {
                     "temperature": 0.1,
                     "top_p": 0.9,
-                    "num_predict": 500
+                    "num_predict": 1000  # Augmenté pour Codellama
                 }
             },
             timeout=120
@@ -440,16 +449,20 @@ def validate_sparql_query(query: str) -> bool:
         return False
     
     # Vérifier les mots-clés SPARQL essentiels
-    essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']
+    essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'INSERT', 'DELETE', 'CREATE', 'DROP']
     if not any(keyword in query.upper() for keyword in essential_keywords):
         return False
     
-    # Vérifier la présence des accolades
-    if '{' not in query or '}' not in query:
+    # Vérifier la présence des accolades pour les patterns
+    if any(keyword in query.upper() for keyword in ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']):
+        if '{' not in query or '}' not in query:
+            return False
+    
+    # Vérifier que le préfixe mobilite est présent
+    if "PREFIX mobilite:" not in query and "mobilite:" in query:
         return False
     
     return True
-
 # ======================
 # 👤 PERSONNES - ENDPOINTS
 # ======================
