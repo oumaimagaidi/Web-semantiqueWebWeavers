@@ -137,6 +137,7 @@
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#222">
+    <donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis"/>
     <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
     <email>emna.ouerghemmi@esprit.tn</email>
     <prenom>emna</prenom>
@@ -518,6 +519,11 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#numeroTicket">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis">
+    <commentaire>bravos</commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
+    <note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</note>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#categoriePermis">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
