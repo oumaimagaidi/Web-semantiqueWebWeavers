@@ -50,18 +50,37 @@ def sync_from_fuseki_to_local():
     Télécharge tous les triples de Fuseki et les enregistre localement
     """
     try:
-        print("🔄 Synchronisation Fuseki → mobilite_updated.rdf ...")
-        url = f"{FUSEKI_DATA_ENDPOINT}?graph=default"
-        response = requests.get(url, headers={"Accept": "application/rdf+xml"})
-        if response.status_code == 200 and response.text.strip():
-            with open("mobilite_updated.rdf", "w", encoding="utf-8") as f:
-                f.write(response.text)
-            print("✅ Synchronisation réussie : fichier local mis à jour.")
-        else:
-            print(f"⚠️ Aucun contenu RDF récupéré (code {response.status_code}).")
+        print("🔄 Synchronisation Fuseki → mobilite.rdf ...")
+        
+        # Essayer plusieurs formats et endpoints
+        endpoints = [
+            f"{FUSEKI_DATA_ENDPOINT}?graph=default",
+            f"{FUSEKI_DATA_ENDPOINT}?default",
+            FUSEKI_DATA_ENDPOINT
+        ]
+        
+        for url in endpoints:
+            try:
+                response = requests.get(url, headers={"Accept": "application/rdf+xml"})
+                if response.status_code == 200 and response.text.strip():
+                    # Sauvegarder dans le fichier principal
+                    with open("mobilite.rdf", "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    print(f"✅ Synchronisation réussie depuis {url}")
+                    
+                    # Recharger le graphe local
+                    global g
+                    g = Graph()
+                    g.parse("mobilite.rdf")
+                    return
+            except Exception as e:
+                print(f"⚠️ Échec avec {url}: {e}")
+                continue
+        
+        print("❌ Aucune méthode de synchronisation n'a fonctionné")
+        
     except Exception as e:
-        print(f"⚠️ Erreur de synchronisation Fuseki → local : {e}")
-
+        print(f"❌ Erreur de synchronisation Fuseki → local : {e}")
 # Exécuter la synchro au démarrage
 sync_from_fuseki_to_local()
 
@@ -83,17 +102,39 @@ app.add_middleware(
 # ======================
 
 def send_to_fuseki(update_query: str):
-    """Envoie une requête SPARQL UPDATE à Fuseki"""
+    """Envoie une requête SPARQL UPDATE à Fuseki avec vérification"""
     sparql = SPARQLWrapper(FUSEKI_UPDATE_URL)
     sparql.setMethod(POST)
     sparql.setQuery(update_query)
     try:
-        sparql.query()
+        print(f"🚀 Envoi de la requête UPDATE à Fuseki...")
+        result = sparql.query()
+        print(f"✅ Requête UPDATE exécutée avec succès")
+        
+        # Vérifier que les données sont bien ajoutées
+        if "INSERT" in update_query.upper():
+            # Attendre un peu pour que Fuseki traite la requête
+            import time
+            time.sleep(0.5)
+            
+            # Vérifier avec une requête COUNT
+            check_query = """
+            PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+            SELECT (COUNT(*) as ?count) WHERE {
+                ?s ?p ?o
+            }
+            """
+            sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+            sparql_check.setReturnFormat(JSON)
+            sparql_check.setQuery(check_query)
+            check_result = sparql_check.query().convert()
+            print(f"📊 Nombre total de triples dans Fuseki : {check_result['results']['bindings'][0]['count']['value']}")
+        
         return True
     except Exception as e:
-        print(f"❌ Erreur lors de l'envoi à Fuseki: {e}")
+        print(f"❌ Erreur détaillée lors de l'envoi à Fuseki: {e}")
+        print(f"📝 Requête problématique: {update_query}")
         return False
-
 def execute_sparql_query(query: str):
     """Exécute une requête SPARQL SELECT et retourne les résultats"""
     sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
@@ -310,13 +351,14 @@ class Trajet(BaseModel):
     duree: float
     heureDepart: str
     heureArrivee: str
+    type_trajet: str = "Trajet"
 
 class Vehicule(BaseModel):
     id: str
     type_vehicule: str
     marque: str
     modele: str
-    immatriculation: str
+    immatriculation: str=""
 
 class Avis(BaseModel):
     id: str
@@ -371,7 +413,100 @@ class PossedeTicket(BaseModel):
 # ======================
 # 🎯 ENDPOINT PRINCIPAL IA - GÉNÉRATION ET EXÉCUTION SPARQL
 # ======================
+class Evenement(BaseModel):
+    id: str
+    type_evenement: str
+    description: str
+    niveau_urgence: str = "medium"
+    infrastructure_id: str = ""
+@app.post("/add_evenement/")
+def add_evenement(evenement: Evenement):
+    """Ajoute un nouvel événement"""
+    type_clean = evenement.type_evenement.capitalize()
+    
+    evenement_uri = MOBILITE[evenement.id]
+    g.add((evenement_uri, RDF.type, MOBILITE[type_clean]))
+    g.add((evenement_uri, MOBILITE.commentaire, Literal(evenement.description, datatype=XSD.string)))
+    
+    # Ajouter la relation avec l'infrastructure si spécifiée
+    if evenement.infrastructure_id:
+        infrastructure_uri = MOBILITE[evenement.infrastructure_id]
+        g.add((evenement_uri, MOBILITE.concerneInfrastructure, infrastructure_uri))
+    
+    g.serialize("mobilite_updated.rdf", format="xml")
 
+    # Construire la requête INSERT
+    infrastructure_part = f" ; mobilite:concerneInfrastructure mobilite:{evenement.infrastructure_id}" if evenement.infrastructure_id else ""
+    
+    insert_query = f"""
+    PREFIX mobilite: <{MOBILITE}>
+    PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+    INSERT DATA {{
+        mobilite:{evenement.id} a mobilite:{type_clean} ;
+                     mobilite:commentaire "{evenement.description}"^^xsd:string{infrastructure_part} .
+    }}
+    """
+    send_to_fuseki(insert_query)
+    return {"message": f"🚨 Événement '{evenement.id}' ajouté (type: {type_clean})."}
+
+@app.get("/evenements/")
+def get_all_evenements():
+    """Récupère tous les événements (tous les types avec commentaire)"""
+    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+    sparql.setReturnFormat(JSON)
+    sparql.setQuery(f"""
+    PREFIX mobilite: <{MOBILITE}>
+    SELECT ?id ?type ?description ?infrastructure WHERE {{
+        ?id a ?type .
+        ?id mobilite:commentaire ?description .
+        OPTIONAL {{ ?id mobilite:concerneInfrastructure ?infrastructure . }}
+        FILTER(STRSTARTS(STR(?type), STR(mobilite:)))
+    }}
+    ORDER BY DESC(?id)
+    """)
+    results = sparql.query().convert()
+
+    evenements = []
+    for r in results["results"]["bindings"]:
+        evenements.append({
+            "id": r["id"]["value"].split("#")[-1],
+            "type": r["type"]["value"].split("#")[-1],
+            "description": r["description"]["value"],
+            "infrastructure": r["infrastructure"]["value"].split("#")[-1] if "infrastructure" in r else None
+        })
+    return evenements
+@app.get("/trajets/")
+def get_all_trajets():
+    """Récupère tous les trajets (pour compatibilité)"""
+    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+    sparql.setReturnFormat(JSON)
+    sparql.setQuery(f"""
+    PREFIX mobilite: <{MOBILITE}>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?id ?type ?distance ?duree ?heureDepart ?heureArrivee ?personne WHERE {{
+        ?id a ?type .
+        ?type rdfs:subClassOf* mobilite:Trajet .
+        OPTIONAL {{ ?id mobilite:distance ?distance . }}
+        OPTIONAL {{ ?id mobilite:duree ?duree . }}
+        OPTIONAL {{ ?id mobilite:heureDepart ?heureDepart . }}
+        OPTIONAL {{ ?id mobilite:heureArrivee ?heureArrivee . }}
+        OPTIONAL {{ ?personne mobilite:effectueTrajet ?id . }}
+    }}
+    """)
+    results = sparql.query().convert()
+
+    trajets = []
+    for r in results["results"]["bindings"]:
+        trajets.append({
+            "id": r["id"]["value"].split("#")[-1],
+            "type": r["type"]["value"].split("#")[-1],
+            "distance": float(r["distance"]["value"]) if "distance" in r else 0,
+            "duree": float(r["duree"]["value"]) if "duree" in r else 0,
+            "heureDepart": r["heureDepart"]["value"] if "heureDepart" in r else None,
+            "heureArrivee": r["heureArrivee"]["value"] if "heureArrivee" in r else None,
+            "personne": r["personne"]["value"].split("#")[-1] if "personne" in r else None
+        })
+    return trajets
 @app.post("/ask/")
 async def ask_question(question_data: dict):
     """
@@ -608,7 +743,11 @@ def add_vehicule(vehicule: Vehicule):
     g.add((vehicule_uri, MOBILITE.marque, Literal(vehicule.marque, datatype=XSD.string)))
     g.add((vehicule_uri, MOBILITE.modele, Literal(vehicule.modele, datatype=XSD.string)))
     g.add((vehicule_uri, MOBILITE.immatriculation, Literal(vehicule.immatriculation, datatype=XSD.string)))
+    if vehicule.immatriculation:
+        g.add((vehicule_uri, MOBILITE.immatriculation, Literal(vehicule.immatriculation, datatype=XSD.string)))
+    
     g.serialize("mobilite_updated.rdf", format="xml")
+    immatriculation_part = f' ; mobilite:immatriculation "{vehicule.immatriculation}"^^xsd:string' if vehicule.immatriculation else ""
 
     insert_query = f"""
     PREFIX mobilite: <{MOBILITE}>
@@ -616,14 +755,139 @@ def add_vehicule(vehicule: Vehicule):
     INSERT DATA {{
         mobilite:{vehicule.id} a mobilite:{type_clean} ;
                        mobilite:marque "{vehicule.marque}"^^xsd:string ;
-                       mobilite:modele "{vehicule.modele}"^^xsd:string ;
-                       mobilite:immatriculation "{vehicule.immatriculation}"^^xsd:string .
+                       mobilite:modele "{vehicule.modele}"^^xsd:string{immatriculation_part} .
     }}
     """
     send_to_fuseki(insert_query)
 
     return {"message": f"🚗 Véhicule de type '{type_clean}' ajouté : '{vehicule.marque} {vehicule.modele}'."}
+@app.get("/infrastructures/")
+def get_all_infrastructures():
+    """Récupère tous les trajets (pour compatibilité)"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?id ?type ?adresse ?nom WHERE {{
+            ?id a ?type .
+            ?type rdfs:subClassOf* mobilite:Infrastructure .
+            OPTIONAL {{ ?id mobilite:adresse ?adresse . }}
+            OPTIONAL {{ ?id mobilite:nom ?nom . }}
+        }}
+        ORDER BY DESC(?id)
+        """
+        sparql.setQuery(query)
+        results = sparql.query().convert()
 
+        data = []
+        for r in results["results"]["bindings"]:
+            data.append({
+                "id": r["id"]["value"].split("#")[-1],
+                "type": r["type"]["value"].split("#")[-1],
+                "adresse": r["adresse"]["value"] if "adresse" in r else None,
+                "nom": r["nom"]["value"] if "nom" in r else None
+            })
+        
+        print(f"📊 {len(data)} infrastructures récupérées de Fuseki")
+        return data
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des infrastructures: {e}")
+        # Fallback: retourner les données du graphe local
+        data = []
+        for s, p, o in g.triples((None, RDF.type, None)):
+            if str(s).startswith(str(MOBILITE)):
+                if any(subclass in str(o) for subclass in ["Route", "Parking", "StationsBus", "StationsMetro", "Batiment"]):
+                    infra_data = {"id": str(s).split("#")[-1], "type": str(o).split("#")[-1]}
+                    # Récupérer les propriétés
+                    for s2, p2, o2 in g.triples((s, None, None)):
+                        if str(p2) == str(MOBILITE.adresse):
+                            infra_data["adresse"] = str(o2)
+                        if str(p2) == str(MOBILITE.nom):
+                            infra_data["nom"] = str(o2)
+                    data.append(infra_data)
+        print(f"📊 Fallback: {len(data)} infrastructures du graphe local")
+        return data
+@app.get("/avis/")
+def get_avis():
+    """Récupère tous les avis avec leurs détails complets - VERSION CORRIGÉE"""
+    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+    sparql.setReturnFormat(JSON)
+    
+    # REQUÊTE SPARQL CORRIGÉE
+    sparql.setQuery(f"""
+    PREFIX mobilite: <{MOBILITE}>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    
+    SELECT ?avis ?type ?commentaire ?note ?utilisateur_id ?nom_utilisateur ?prenom_utilisateur WHERE {{
+      ?avis a ?type .
+      ?type rdfs:subClassOf* mobilite:Avis .
+      
+      OPTIONAL {{ ?avis mobilite:commentaire ?commentaire . }}
+      OPTIONAL {{ ?avis mobilite:note ?note . }}
+      
+      OPTIONAL {{ 
+        ?utilisateur mobilite:donneAvis ?avis .
+        BIND(STR(?utilisateur) AS ?utilisateur_id)
+        OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilisateur . }}
+        OPTIONAL {{ ?utilisateur mobilite:prenom ?prenom_utilisateur . }}
+      }}
+    }}
+    ORDER BY DESC(?note)
+    """)
+    
+    try:
+        results = sparql.query().convert()
+        print(f"🔍 Résultats SPARQL bruts: {results}")
+
+        avis_list = []
+        seen = set()
+
+        for r in results["results"]["bindings"]:
+            avis_uri = r["avis"]["value"]
+            if avis_uri not in seen:
+                seen.add(avis_uri)
+                
+                # Extraire l'ID de l'avis
+                avis_id = avis_uri.split("#")[-1] if "#" in avis_uri else avis_uri.split("/")[-1]
+                
+                # Déterminer le type d'avis
+                type_uri = r["type"]["value"]
+                avis_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+                
+                # Récupérer l'utilisateur
+                utilisateur_data = None
+                if "utilisateur_id" in r:
+                    utilisateur_uri = r["utilisateur_id"]["value"]
+                    utilisateur_id = utilisateur_uri.split("#")[-1] if "#" in utilisateur_uri else utilisateur_uri.split("/")[-1]
+                    
+                    nom_utilisateur = r.get("nom_utilisateur", {}).get("value", "")
+                    prenom_utilisateur = r.get("prenom_utilisateur", {}).get("value", "")
+                    
+                    utilisateur_data = {
+                        "id": utilisateur_id,
+                        "nom": nom_utilisateur,
+                        "prenom": prenom_utilisateur,
+                        "display_name": f"{prenom_utilisateur} {nom_utilisateur}".strip() or utilisateur_id
+                    }
+                
+                avis_list.append({
+                    "id": avis_id,
+                    "type": avis_type,
+                    "commentaire": r.get("commentaire", {}).get("value", ""),
+                    "note": int(r["note"]["value"]) if "note" in r else 0,
+                    "utilisateur": utilisateur_data,
+                    "statut": "Positif" if avis_type == "AvisPositif" else "Négatif" if avis_type == "AvisNegatif" else "Neutre"
+                })
+
+        print(f"✅ {len(avis_list)} avis trouvés et transformés")
+        return avis_list
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des avis: {str(e)}")
+        return []
 @app.get("/vehicules/")
 def get_all_vehicules():
     sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
@@ -770,13 +1034,18 @@ def add_infrastructure(infra: Infrastructure):
     if type_clean not in valid_types:
         return {"error": f"❌ Type '{infra.type_infrastructure}' invalide. Doit être un de {valid_types}"}
 
+    # 1. Ajouter au graphe local
     infra_uri = MOBILITE[infra.id]
     g.add((infra_uri, RDF.type, MOBILITE[type_clean]))
     g.add((infra_uri, MOBILITE.adresse, Literal(infra.adresse, datatype=XSD.string)))
     if infra.nom:
         g.add((infra_uri, MOBILITE.nom, Literal(infra.nom, datatype=XSD.string)))
-    g.serialize("mobilite_updated.rdf", format="xml")
+    
+    # Sauvegarder le fichier local
+    g.serialize("mobilite.rdf", format="xml")
+    print(f"💾 Infrastructure sauvegardée localement: {infra.id}")
 
+    # 2. Envoyer à Fuseki
     nom_part = f' ; mobilite:nom "{infra.nom}"^^xsd:string' if infra.nom else ""
     
     insert_query = f"""
@@ -787,13 +1056,75 @@ def add_infrastructure(infra: Infrastructure):
                      mobilite:adresse "{infra.adresse}"^^xsd:string{nom_part} .
     }}
     """
-    send_to_fuseki(insert_query)
-    return {"message": f"🏗️ Infrastructure '{infra.id}' ajoutée (type: {type_clean})."}
-
+    
+    success = send_to_fuseki(insert_query)
+    
+    if success:
+        # Synchroniser le fichier local avec Fuseki pour être sûr
+        sync_from_fuseki_to_local()
+        return {"message": f"🏗️ Infrastructure '{infra.id}' ajoutée (type: {type_clean})."}
+    else:
+        return {"error": f"❌ Échec de l'ajout de l'infrastructure '{infra.id}' à Fuseki"}
 # ======================
 # ⚡ STATIONS RECHARGE - ENDPOINTS
 # ======================
-
+@app.get("/debug/infrastructures/")
+def debug_infrastructures():
+    """Endpoint de debug pour vérifier les infrastructures dans Fuseki"""
+    
+    # Requête pour compter toutes les infrastructures
+    count_query = """
+    PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT (COUNT(?id) as ?count) WHERE {
+        ?id a ?type .
+        ?type rdfs:subClassOf* mobilite:Infrastructure .
+    }
+    """
+    
+    # Requête pour lister toutes les infrastructures avec détails
+    detail_query = """
+    PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?id ?type ?adresse ?nom WHERE {
+        ?id a ?type .
+        ?type rdfs:subClassOf* mobilite:Infrastructure .
+        OPTIONAL { ?id mobilite:adresse ?adresse . }
+        OPTIONAL { ?id mobilite:nom ?nom . }
+    }
+    ORDER BY ?id
+    """
+    
+    try:
+        # Compter
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        sparql.setQuery(count_query)
+        count_result = sparql.query().convert()
+        count = count_result['results']['bindings'][0]['count']['value']
+        
+        # Détails
+        sparql.setQuery(detail_query)
+        detail_result = sparql.query().convert()
+        
+        infrastructures = []
+        for r in detail_result["results"]["bindings"]:
+            infrastructures.append({
+                "id": r["id"]["value"].split("#")[-1],
+                "type": r["type"]["value"].split("#")[-1],
+                "adresse": r["adresse"]["value"] if "adresse" in r else None,
+                "nom": r["nom"]["value"] if "nom" in r else None
+            })
+        
+        return {
+            "total_count": count,
+            "infrastructures": infrastructures,
+            "fuseki_url": FUSEKI_QUERY_URL,
+            "fuseki_update_url": FUSEKI_UPDATE_URL
+        }
+        
+    except Exception as e:
+        return {"error": f"Erreur de diagnostic: {str(e)}"}
 @app.post("/add_station_recharge/")
 def add_station_recharge(station: StationRecharge):
     type_clean = "RechargeElectrique"  # Par défaut électrique

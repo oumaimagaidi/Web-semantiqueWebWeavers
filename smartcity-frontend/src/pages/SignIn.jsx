@@ -153,7 +153,7 @@ export default function SignIn() {
                 <span style={styles.logoIcon}>⚡</span>
               </div>
               <div style={styles.logoTextContainer}>
-                <span style={styles.logoText}>NEXUS</span>
+                <span style={styles.logoText}>smartCity</span>
                 <span style={styles.logoSubtext}>ACCESS CONTROL</span>
               </div>
             </div>

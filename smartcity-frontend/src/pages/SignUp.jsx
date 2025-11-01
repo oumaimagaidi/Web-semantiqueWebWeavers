@@ -217,7 +217,7 @@ export default function SignUp() {
                 <span style={styles.logoIcon}>⚡</span>
               </div>
               <div style={styles.logoTextContainer}>
-                <span style={styles.logoText}>NEXUS</span>
+                <span style={styles.logoText}>SCity</span>
                 <span style={styles.logoSubtext}>SMART CITY NETWORK</span>
               </div>
             </div>

@@ -11,8 +11,23 @@ export default function Transports() {
     id: "", 
     marque: "", 
     modele: "", 
-    type_vehicule: "Voiture" 
+    type_vehicule: "Voiture" ,
+    immatriculation: ""
   });
+  const [particles, setParticles] = useState([]);
+
+  // Système de particules futuriste
+  useEffect(() => {
+    const newParticles = Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 2 + 1,
+      speed: Math.random() * 3 + 1,
+      delay: Math.random() * 5
+    }));
+    setParticles(newParticles);
+  }, []);
 
   // ✅ Fonction pour charger les véhicules
   const loadVehicules = async () => {
@@ -50,7 +65,7 @@ export default function Transports() {
   const addVehicule = async () => {
     try {
       await axios.post("http://localhost:8000/add_vehicule/", form);
-      setForm({ id: "", marque: "", modele: "", type_vehicule: "Voiture" });
+      setForm({ id: "", marque: "", modele: "", type_vehicule: "Voiture" ,immatriculation: "" });
       loadVehicules();
     } catch (error) {
       console.error("Erreur lors de l'ajout du véhicule :", error);
@@ -72,17 +87,18 @@ export default function Transports() {
   };
 
   const vehiculeFields = [
-    { key: "id", label: "ID", type: "text", placeholder: "ID unique du véhicule" },
-    { key: "marque", label: "Marque", type: "text", placeholder: "Marque du véhicule" },
-    { key: "modele", label: "Modèle", type: "text", placeholder: "Modèle du véhicule" }
+    { key: "id", label: "IDENTIFIANT UNIQUE", type: "text", placeholder: "ID_VÉHICULE" },
+    { key: "marque", label: "MARQUE", type: "text", placeholder: "MARQUE DU VÉHICULE" },
+    { key: "modele", label: "MODÈLE", type: "text", placeholder: "MODÈLE DU VÉHICULE" },
+    { key: "immatriculation", label: "IMMATRICULATION", type: "text", placeholder: "PLAQUE D'IMMATRICULATION (OPTIONNEL)" } 
   ];
 
   const typeOptions = [
-    { value: "Voiture", label: "🚗 Voiture" },
-    { value: "Bus", label: "🚌 Bus" },
-    { value: "Metro", label: "🚇 Métro" },
-    { value: "Velo", label: "🚲 Vélo" },
-    { value: "Trottinette", label: "🛴 Trottinette" }
+    { value: "Voiture", label: "🚗 VÉHICULE TERRESTRE" },
+    { value: "Bus", label: "🚌 UNITÉ DE TRANSPORT" },
+    { value: "Metro", label: "🚇 SYSTÈME MÉTRO" },
+    { value: "Velo", label: "🚲 MOBILITÉ DOUCE" },
+    { value: "Trottinette", label: "🛴 MICRO-MOBILITÉ" }
   ];
 
   const getVehicleIcon = (type) => {
@@ -99,11 +115,11 @@ export default function Transports() {
 
   const getVehicleColor = (type) => {
     const colors = {
-      'Voiture': '#3b82f6',
-      'Bus': '#f59e0b',
-      'Metro': '#dc2626',
-      'Velo': '#84cc16',
-      'Trottinette': '#8b5cf6',
+      'Voiture': '#00ffff',
+      'Bus': '#ff00ff',
+      'Metro': '#ffaa00',
+      'Velo': '#00ff88',
+      'Trottinette': '#8884d8',
       'default': '#6b7280'
     };
     return colors[type] || colors.default;
@@ -123,11 +139,11 @@ export default function Transports() {
 
   const getInfrastructureColor = (type) => {
     const colors = {
-      'Parking': '#f59e0b',
-      'Route': '#6b7280',
-      'StationsBus': '#3b82f6',
-      'StationsMetro': '#dc2626',
-      'Batiment': '#059669',
+      'Parking': '#ffaa00',
+      'Route': '#88ffff',
+      'StationsBus': '#ff00ff',
+      'StationsMetro': '#00ffff',
+      'Batiment': '#00ff88',
       'default': '#6b7280'
     };
     return colors[type] || colors.default;
@@ -138,28 +154,67 @@ export default function Transports() {
 
   return (
     <div style={styles.container}>
+      {/* Réseau neuronal cybernétique */}
+      <div style={styles.neuralNetwork}>
+        {particles.map(particle => (
+          <div
+            key={particle.id}
+            style={{
+              ...styles.neuralParticle,
+              left: `${particle.x}%`,
+              top: `${particle.y}%`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              animationDelay: `${particle.delay}s`,
+              animationDuration: `${particle.speed * 8}s`
+            }}
+          />
+        ))}
+        
+        {/* Lignes de données */}
+        <div style={styles.dataStream}>
+          {Array.from({ length: 6 }, (_, i) => (
+            <div
+              key={i}
+              style={{
+                ...styles.dataLine,
+                left: `${i * 15}%`,
+                animationDelay: `${i * 0.3}s`
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
       <div style={styles.wrapper}>
-        {/* En-tête */}
+        {/* En-tête holographique */}
         <div style={styles.header}>
+          <div style={styles.headerGlow}></div>
           <div style={styles.headerContent}>
             <div style={styles.titleSection}>
-              <h1 style={styles.title}>🚗 Gestion des Transports</h1>
+              <h1 style={styles.title}>
+                <span style={styles.titleIcon}>🚗</span>
+                SYSTÈME DE TRANSPORTS INTELLIGENTS
+              </h1>
               <p style={styles.subtitle}>
-                Administrez les véhicules et infrastructures de transport de votre ville intelligente
+                SURVEILLANCE ET GESTION DU RÉSEAU DE MOBILITÉ URBAINE
               </p>
             </div>
             <div style={styles.stats}>
               <div style={styles.statItem}>
+                <div style={styles.statGlow}></div>
                 <span style={styles.statNumber}>{vehicules.length}</span>
-                <span style={styles.statLabel}>Véhicules</span>
+                <span style={styles.statLabel}>UNITÉS MOBILES</span>
               </div>
               <div style={styles.statItem}>
+                <div style={styles.statGlow}></div>
                 <span style={styles.statNumber}>{infrastructures.length}</span>
-                <span style={styles.statLabel}>Infrastructures</span>
+                <span style={styles.statLabel}>INFRASTRUCTURES</span>
               </div>
               <div style={styles.statItem}>
+                <div style={styles.statGlow}></div>
                 <span style={styles.statNumber}>{totalCount}</span>
-                <span style={styles.statLabel}>Total</span>
+                <span style={styles.statLabel}>TOTAL ACTIF</span>
               </div>
             </div>
           </div>
@@ -174,7 +229,8 @@ export default function Transports() {
             }}
             onClick={() => setActiveTab("vehicules")}
           >
-            🚗 Véhicules
+            <span style={styles.tabIcon}>🚗</span>
+            UNITÉS MOBILES
           </button>
           <button
             style={{
@@ -183,15 +239,17 @@ export default function Transports() {
             }}
             onClick={() => setActiveTab("infrastructures")}
           >
-            🏗️ Infrastructures
+            <span style={styles.tabIcon}>🏗️</span>
+            INFRASTRUCTURES
           </button>
         </div>
 
         {/* Formulaire pour véhicules */}
         {activeTab === "vehicules" && (
           <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
             <div style={styles.formHeader}>
-              <h3 style={styles.formTitle}>➕ Ajouter un nouveau véhicule</h3>
+              <h3 style={styles.formTitle}>➕ INITIER UNE NOUVELLE UNITÉ MOBILE</h3>
               <div style={styles.formIndicator}></div>
             </div>
             <form onSubmit={handleSubmit}>
@@ -202,51 +260,60 @@ export default function Transports() {
                       {label}
                       <span style={styles.required}>*</span>
                     </label>
-                    <input
-                      type={type}
-                      placeholder={placeholder}
-                      value={form[key]}
-                      onChange={(e) => handleInputChange(key, e.target.value)}
-                      style={styles.input}
-                      required
-                    />
+                    <div style={styles.inputContainer}>
+                      <input
+                        type={type}
+                        placeholder={placeholder}
+                        value={form[key]}
+                        onChange={(e) => handleInputChange(key, e.target.value)}
+                        style={styles.input}
+                        required
+                      />
+                      <div style={styles.inputGlow}></div>
+                    </div>
                   </div>
                 ))}
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>
-                    Type de véhicule
+                    TYPE DE VÉHICULE
                     <span style={styles.required}>*</span>
                   </label>
-                  <select
-                    value={form.type_vehicule}
-                    onChange={(e) => handleInputChange("type_vehicule", e.target.value)}
-                    style={styles.select}
-                    required
-                  >
-                    {typeOptions.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.type_vehicule}
+                      onChange={(e) => handleInputChange("type_vehicule", e.target.value)}
+                      style={styles.select}
+                      required
+                    >
+                      {typeOptions.map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
                 </div>
               </div>
               
               <div style={styles.formActions}>
                 <button 
                   type="submit"
-                  style={styles.primaryButton}
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
                   disabled={loading}
                 >
                   {loading ? (
                     <div style={styles.buttonContent}>
-                      <div style={styles.spinner}></div>
-                      <span>Ajout en cours...</span>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>CRYPTAGE EN COURS...</span>
                     </div>
                   ) : (
                     <div style={styles.buttonContent}>
-                      <span style={styles.buttonIcon}>🚗</span>
-                      <span>Ajouter le véhicule</span>
+                      <span style={styles.buttonIcon}>⚡</span>
+                      <span>ACTIVER L'UNITÉ MOBILE</span>
                     </div>
                   )}
                 </button>
@@ -256,7 +323,8 @@ export default function Transports() {
                   onClick={() => setForm({ id: "", marque: "", modele: "", type_vehicule: "Voiture" })}
                   style={styles.secondaryButton}
                 >
-                  🔄 Réinitialiser
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
                 </button>
               </div>
             </form>
@@ -267,23 +335,34 @@ export default function Transports() {
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>
-              {activeTab === "vehicules" ? "📋 Liste des Véhicules" : "🏗️ Liste des Infrastructures"}
+              {activeTab === "vehicules" ? "📋 RÉPERTOIRE DES UNITÉS MOBILES" : "🏗️ INVENTAIRE DES INFRASTRUCTURES"}
             </h3>
             <button 
               onClick={activeTab === "vehicules" ? loadVehicules : loadInfrastructures}
               style={styles.refreshButton}
               disabled={loading}
             >
-              {loading ? '🔄' : '🔄'} Actualiser
+              {loading ? (
+                <div style={styles.buttonContent}>
+                  <div style={styles.smallSpinner}></div>
+                  <span>SYNCHRONISATION...</span>
+                </div>
+              ) : (
+                <div style={styles.buttonContent}>
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>ACTUALISER</span>
+                </div>
+              )}
             </button>
           </div>
 
           <div style={styles.tableCard}>
+            <div style={styles.cardGlow}></div>
             {loading ? (
               <div style={styles.loadingState}>
-                <div style={styles.spinner}></div>
+                <div style={styles.quantumSpinner}></div>
                 <p style={styles.loadingText}>
-                  {activeTab === "vehicules" ? "Chargement des véhicules..." : "Chargement des infrastructures..."}
+                  {activeTab === "vehicules" ? "CHARGEMENT DES UNITÉS MOBILES..." : "CHARGEMENT DES INFRASTRUCTURES..."}
                 </p>
               </div>
             ) : (
@@ -295,16 +374,16 @@ export default function Transports() {
                         {activeTab === "vehicules" ? (
                           <>
                             <th style={styles.tableHead}>ID</th>
-                            <th style={styles.tableHead}>Véhicule</th>
-                            <th style={styles.tableHead}>Marque/Modèle</th>
-                            <th style={styles.tableHead}>Type</th>
+                            <th style={styles.tableHead}>UNITÉ MOBILE</th>
+                            <th style={styles.tableHead}>SPÉCIFICATIONS</th>
+                            <th style={styles.tableHead}>TYPE</th>
                           </>
                         ) : (
                           <>
                             <th style={styles.tableHead}>ID</th>
-                            <th style={styles.tableHead}>Infrastructure</th>
-                            <th style={styles.tableHead}>Adresse</th>
-                            <th style={styles.tableHead}>Type</th>
+                            <th style={styles.tableHead}>INFRASTRUCTURE</th>
+                            <th style={styles.tableHead}>LOCALISATION</th>
+                            <th style={styles.tableHead}>TYPE</th>
                           </>
                         )}
                       </tr>
@@ -322,7 +401,10 @@ export default function Transports() {
                                   ...styles.itemIcon,
                                   backgroundColor: activeTab === "vehicules" 
                                     ? getVehicleColor(item.type)
-                                    : getInfrastructureColor(item.type)
+                                    : getInfrastructureColor(item.type),
+                                  boxShadow: `0 0 20px ${activeTab === "vehicules" 
+                                    ? getVehicleColor(item.type)
+                                    : getInfrastructureColor(item.type)}`
                                 }}
                               >
                                 {activeTab === "vehicules" 
@@ -335,7 +417,7 @@ export default function Transports() {
                                   {activeTab === "vehicules" ? `${item.marque} ${item.modele}` : item.nom}
                                 </div>
                                 <div style={styles.itemDetails}>
-                                  {activeTab === "vehicules" ? "Véhicule de transport" : "Infrastructure urbaine"}
+                                  {activeTab === "vehicules" ? "UNITÉ DE TRANSPORT CONNECTÉE" : "INFRASTRUCTURE URBAINE INTELLIGENTE"}
                                 </div>
                               </div>
                             </div>
@@ -347,7 +429,7 @@ export default function Transports() {
                               </span>
                             ) : (
                               <span style={styles.detailsText}>
-                                {item.adresse || "Non spécifiée"}
+                                {item.adresse || "LOCALISATION NON SPÉCIFIÉE"}
                               </span>
                             )}
                           </td>
@@ -357,13 +439,16 @@ export default function Transports() {
                                 ...styles.typeBadge,
                                 backgroundColor: activeTab === "vehicules" 
                                   ? getVehicleColor(item.type)
-                                  : getInfrastructureColor(item.type)
+                                  : getInfrastructureColor(item.type),
+                                boxShadow: `0 0 15px ${activeTab === "vehicules" 
+                                  ? getVehicleColor(item.type)
+                                  : getInfrastructureColor(item.type)}`
                               }}
                             >
                               {activeTab === "vehicules" 
                                 ? getVehicleIcon(item.type)
                                 : getInfrastructureIcon(item.type)
-                              } {item.type}
+                              } {item.type.toUpperCase()}
                             </span>
                           </td>
                         </tr>
@@ -379,14 +464,14 @@ export default function Transports() {
                     </div>
                     <div style={styles.emptyText}>
                       {activeTab === "vehicules" 
-                        ? "Aucun véhicule trouvé" 
-                        : "Aucune infrastructure trouvée"
+                        ? "AUCUNE UNITÉ MOBILE DÉTECTÉE" 
+                        : "AUCUNE INFRASTRUCTURE IDENTIFIÉE"
                       }
                     </div>
                     <div style={styles.emptySubtext}>
                       {activeTab === "vehicules"
-                        ? "Commencez par ajouter un nouveau véhicule"
-                        : "Les infrastructures apparaîtront ici"
+                        ? "INITIEZ L'AJOUT D'UNE NOUVELLE UNITÉ MOBILE"
+                        : "LES INFRASTRUCTURES APPARAÎTRONT ICI APRÈS SYNCHRONISATION"
                       }
                     </div>
                   </div>
@@ -403,17 +488,71 @@ export default function Transports() {
 const styles = {
   container: {
     minHeight: '100vh',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0a0a0a',
+    background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)',
     padding: '0',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    fontFamily: "'Orbitron', 'Rajdhani', monospace",
+    color: '#ffffff',
+    position: 'relative',
+    overflowX: 'hidden'
+  },
+  neuralNetwork: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+    zIndex: 0
+  },
+  neuralParticle: {
+    position: "absolute",
+    backgroundColor: "#00ffff",
+    borderRadius: "50%",
+    animation: "neuralFloat 15s ease-in-out infinite",
+    boxShadow: "0 0 8px #00ffff, 0 0 16px #00ffff"
+  },
+  dataStream: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0
+  },
+  dataLine: {
+    position: "absolute",
+    width: "1px",
+    height: "100px",
+    background: "linear-gradient(180deg, transparent, #00ffff, transparent)",
+    animation: "dataFlow 4s linear infinite",
+    opacity: 0.4
   },
   wrapper: {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '2rem 1.5rem'
+    padding: '2rem 1.5rem',
+    position: 'relative',
+    zIndex: 2
   },
   header: {
-    marginBottom: '2rem'
+    marginBottom: '2rem',
+    background: "rgba(10, 15, 35, 0.85)",
+    padding: '2rem',
+    borderRadius: '1.5rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    boxShadow: '0 0 30px rgba(0, 255, 255, 0.1)',
+    backdropFilter: 'blur(15px)',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  headerGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'linear-gradient(90deg, transparent, rgba(0,255,255,0.05), transparent)',
+    animation: 'hologramGlow 3s ease-in-out infinite'
   },
   headerContent: {
     display: 'flex',
@@ -425,19 +564,27 @@ const styles = {
     flex: 1
   },
   title: {
-    fontSize: '2.25rem',
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontSize: '2rem',
+    fontWeight: '700',
     marginBottom: '0.5rem',
-    background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
+    background: 'linear-gradient(135deg, #ffffff, #88ffff)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text'
+    backgroundClip: 'text',
+    letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  titleIcon: {
+    fontSize: '2rem'
   },
   subtitle: {
-    color: '#6b7280',
-    fontSize: '1.125rem',
-    maxWidth: '500px'
+    color: '#88ffff',
+    fontSize: '1rem',
+    maxWidth: '500px',
+    fontWeight: '300',
+    letterSpacing: '0.5px'
   },
   stats: {
     display: 'flex',
@@ -448,54 +595,88 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: '1rem 1.5rem',
-    backgroundColor: 'white',
+    padding: '1.5rem 2rem',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
     borderRadius: '1rem',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-    border: '1px solid #e5e7eb',
-    minWidth: '100px'
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    minWidth: '140px',
+    position: 'relative',
+    overflow: 'hidden',
+    backdropFilter: 'blur(10px)'
+  },
+  statGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'radial-gradient(circle at center, rgba(0,255,255,0.1) 0%, transparent 70%)',
+    animation: 'pulse 2s ease-in-out infinite'
   },
   statNumber: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    color: '#3b82f6'
+    fontSize: '2.5rem',
+    fontWeight: '800',
+    color: '#00ffff',
+    textShadow: '0 0 10px rgba(0, 255, 255, 0.5)'
   },
   statLabel: {
-    fontSize: '0.75rem',
-    color: '#6b7280',
-    textAlign: 'center'
+    fontSize: '0.8rem',
+    color: '#88ffff',
+    textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: '1px'
   },
   tabs: {
     display: 'flex',
     gap: '0.5rem',
     marginBottom: '2rem',
-    borderBottom: '2px solid #e5e7eb',
+    borderBottom: '2px solid rgba(0, 255, 255, 0.3)',
     paddingBottom: '0.5rem'
   },
   tab: {
-    padding: '0.75rem 1.5rem',
+    padding: '1rem 2rem',
     border: 'none',
-    backgroundColor: 'transparent',
-    borderRadius: '0.5rem',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    borderRadius: '0.75rem',
     cursor: 'pointer',
-    fontSize: '0.875rem',
-    fontWeight: '500',
+    fontSize: '0.9rem',
+    fontWeight: '600',
     transition: 'all 0.3s ease',
-    color: '#6b7280'
+    color: '#88ffff',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    letterSpacing: '0.5px'
   },
   activeTab: {
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)'
+    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    color: '#00ffff',
+    boxShadow: '0 0 20px rgba(0, 255, 255, 0.3)',
+    border: '1px solid rgba(0, 255, 255, 0.5)'
+  },
+  tabIcon: {
+    fontSize: '1.25rem'
   },
   formCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(10, 15, 35, 0.7)',
     borderRadius: '1.5rem',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-    border: '1px solid #e5e7eb',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
     padding: '2rem',
     marginBottom: '3rem',
-    background: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)'
+    backdropFilter: 'blur(15px)',
+    boxShadow: '0 0 25px rgba(0, 255, 255, 0.1)',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  cardGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'radial-gradient(circle at center, rgba(0,255,255,0.05) 0%, transparent 70%)',
+    animation: 'pulse 3s ease-in-out infinite',
+    pointerEvents: 'none'
   },
   formHeader: {
     display: 'flex',
@@ -504,14 +685,15 @@ const styles = {
     marginBottom: '2rem'
   },
   formTitle: {
-    fontSize: '1.5rem',
+    fontSize: '1.3rem',
     fontWeight: '600',
-    color: '#1f2937'
+    color: '#00ffff',
+    letterSpacing: '1px'
   },
   formIndicator: {
     width: '4rem',
     height: '0.25rem',
-    background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     borderRadius: '2rem'
   },
   formGrid: {
@@ -525,35 +707,55 @@ const styles = {
   },
   label: {
     display: 'block',
-    fontSize: '0.875rem',
+    fontSize: '0.8rem',
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: '0.5rem'
+    color: '#88ffff',
+    marginBottom: '0.5rem',
+    letterSpacing: '1px'
   },
   required: {
-    color: '#ef4444',
+    color: '#ff00ff',
     marginLeft: '0.25rem'
+  },
+  inputContainer: {
+    position: 'relative'
   },
   input: {
     width: '100%',
     padding: '1rem 1.25rem',
-    border: '2px solid #e5e7eb',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
     borderRadius: '0.75rem',
     fontSize: '1rem',
     transition: 'all 0.3s ease',
     outline: 'none',
-    backgroundColor: '#fafafa'
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    color: '#ffffff',
+    fontFamily: "'Rajdhani', sans-serif"
   },
   select: {
     width: '100%',
     padding: '1rem 1.25rem',
-    border: '2px solid #e5e7eb',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
     borderRadius: '0.75rem',
     fontSize: '1rem',
     transition: 'all 0.3s ease',
     outline: 'none',
-    backgroundColor: '#fafafa',
-    cursor: 'pointer'
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    color: '#ffffff',
+    cursor: 'pointer',
+    fontFamily: "'Rajdhani', sans-serif"
+  },
+  inputGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: '0.75rem',
+    boxShadow: '0 0 0 0 rgba(0, 255, 255, 0)',
+    transition: 'all 0.3s ease',
+    pointerEvents: 'none',
+    zIndex: -1
   },
   formActions: {
     display: 'flex',
@@ -562,28 +764,34 @@ const styles = {
     flexWrap: 'wrap'
   },
   primaryButton: {
-    background: 'linear-gradient(135deg, #3b82f6, #1e40af)',
-    color: 'white',
-    fontWeight: '600',
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
     padding: '1rem 2rem',
     borderRadius: '0.75rem',
     border: 'none',
     cursor: 'pointer',
-    fontSize: '1rem',
+    fontSize: '0.9rem',
     transition: 'all 0.3s ease',
-    boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)',
-    minWidth: '200px'
+    boxShadow: '0 0 25px rgba(0, 255, 255, 0.4)',
+    minWidth: '200px',
+    letterSpacing: '1px'
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
   },
   secondaryButton: {
     backgroundColor: 'transparent',
-    color: '#6b7280',
+    color: '#88ffff',
     fontWeight: '600',
     padding: '1rem 1.5rem',
     borderRadius: '0.75rem',
-    border: '2px solid #e5e7eb',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
     cursor: 'pointer',
     fontSize: '0.875rem',
-    transition: 'all 0.3s ease'
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
   },
   buttonContent: {
     display: 'flex',
@@ -591,15 +799,24 @@ const styles = {
     gap: '0.5rem'
   },
   buttonIcon: {
-    fontSize: '1.125rem'
+    fontSize: '1.125rem',
+    filter: 'drop-shadow(0 0 5px currentColor)'
   },
-  spinner: {
-    width: '1.25rem',
-    height: '1.25rem',
+  quantumSpinner: {
+    width: '1.5rem',
+    height: '1.5rem',
+    border: '2px solid transparent',
+    borderTop: '2px solid #0a0a0a',
+    borderRadius: '50%',
+    animation: 'quantumSpin 1s linear infinite'
+  },
+  smallSpinner: {
+    width: '1rem',
+    height: '1rem',
     border: '2px solid transparent',
     borderTop: '2px solid currentColor',
     borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
+    animation: 'quantumSpin 1s linear infinite'
   },
   section: {
     marginBottom: '2rem'
@@ -611,27 +828,31 @@ const styles = {
     marginBottom: '1.5rem'
   },
   sectionTitle: {
-    fontSize: '1.5rem',
+    fontSize: '1.3rem',
     fontWeight: '600',
-    color: '#1f2937'
+    color: '#00ffff',
+    letterSpacing: '1px'
   },
   refreshButton: {
-    backgroundColor: '#f3f4f6',
-    color: '#374151',
-    fontWeight: '500',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
     padding: '0.75rem 1.25rem',
     borderRadius: '0.75rem',
-    border: 'none',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
     cursor: 'pointer',
-    fontSize: '0.875rem',
-    transition: 'all 0.3s ease'
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
   },
   tableCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(10, 15, 35, 0.7)',
     borderRadius: '1.5rem',
-    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-    border: '1px solid #e5e7eb',
-    overflow: 'hidden'
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    overflow: 'hidden',
+    backdropFilter: 'blur(15px)',
+    boxShadow: '0 0 25px rgba(0, 255, 255, 0.1)',
+    position: 'relative'
   },
   tableWrapper: {
     overflowX: 'auto'
@@ -642,37 +863,38 @@ const styles = {
     minWidth: '800px'
   },
   tableHeader: {
-    backgroundColor: '#f8fafc',
-    borderBottom: '2px solid #e5e7eb'
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    borderBottom: '2px solid rgba(0, 255, 255, 0.3)'
   },
   tableHead: {
     padding: '1.25rem 1.5rem',
     textAlign: 'left',
     fontSize: '0.75rem',
     fontWeight: '600',
-    color: '#374151',
+    color: '#88ffff',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     whiteSpace: 'nowrap'
   },
   tableRow: {
     transition: 'all 0.3s ease',
-    borderBottom: '1px solid #f3f4f6'
+    borderBottom: '1px solid rgba(0, 255, 255, 0.1)'
   },
   tableCell: {
     padding: '1.25rem 1.5rem',
     fontSize: '0.875rem',
-    color: '#374151',
+    color: '#ffffff',
     whiteSpace: 'nowrap'
   },
   itemId: {
     fontFamily: 'monospace',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
     padding: '0.375rem 0.75rem',
     borderRadius: '0.5rem',
     fontSize: '0.75rem',
     fontWeight: '600',
-    color: '#374151'
+    color: '#00ffff',
+    letterSpacing: '0.5px'
   },
   itemInfo: {
     display: 'flex',
@@ -693,29 +915,31 @@ const styles = {
   },
   itemName: {
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#ffffff',
     fontSize: '1rem'
   },
   itemDetails: {
     fontSize: '0.75rem',
-    color: '#6b7280',
-    marginTop: '0.25rem'
+    color: '#88ffff',
+    marginTop: '0.25rem',
+    letterSpacing: '0.5px'
   },
   detailsText: {
-    color: '#6b7280',
+    color: '#88ffff',
     fontSize: '0.875rem'
   },
   typeBadge: {
     color: 'white',
     padding: '0.5rem 1rem',
     borderRadius: '1rem',
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     fontWeight: '600',
-    textTransform: 'capitalize',
+    textTransform: 'uppercase',
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.25rem',
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
+    letterSpacing: '0.5px'
   },
   loadingState: {
     display: 'flex',
@@ -726,8 +950,10 @@ const styles = {
     gap: '1rem'
   },
   loadingText: {
-    color: '#6b7280',
-    fontSize: '1rem'
+    color: '#88ffff',
+    fontSize: '1rem',
+    fontWeight: '300',
+    letterSpacing: '1px'
   },
   emptyState: {
     display: 'flex',
@@ -740,22 +966,123 @@ const styles = {
   },
   emptyIcon: {
     fontSize: '4rem',
-    opacity: 0.5
+    opacity: 0.5,
+    filter: 'drop-shadow(0 0 10px rgba(0,255,255,0.5))'
   },
   emptyText: {
-    color: '#374151',
+    color: '#ffffff',
     fontSize: '1.25rem',
-    fontWeight: '600'
+    fontWeight: '600',
+    letterSpacing: '1px'
   },
   emptySubtext: {
-    color: '#6b7280',
-    fontSize: '1rem',
-    maxWidth: '300px'
+    color: '#88ffff',
+    fontSize: '0.9rem',
+    maxWidth: '300px',
+    fontWeight: '300'
   }
 };
 
-// Media queries et animations
-const mediaQueries = `
+// Styles CSS globaux
+const globalStyles = `
+  @keyframes neuralFloat {
+    0%, 100% { 
+      transform: translate(0, 0) rotate(0deg);
+      opacity: 0.3;
+    }
+    25% { 
+      transform: translate(10px, -15px) rotate(90deg);
+      opacity: 0.6;
+    }
+    50% { 
+      transform: translate(-5px, -25px) rotate(180deg);
+      opacity: 0.8;
+    }
+    75% { 
+      transform: translate(-15px, -10px) rotate(270deg);
+      opacity: 0.6;
+    }
+  }
+
+  @keyframes dataFlow {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(400%); }
+  }
+
+  @keyframes quantumSpin {
+    0% { 
+      transform: rotate(0deg) scale(1);
+      box-shadow: 0 0 20px #00ffff;
+    }
+    50% { 
+      transform: rotate(180deg) scale(1.1);
+      box-shadow: 0 0 30px #ff00ff;
+    }
+    100% { 
+      transform: rotate(360deg) scale(1);
+      box-shadow: 0 0 20px #00ffff;
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  @keyframes hologramGlow {
+    0%, 100% { 
+      opacity: 0.6;
+      filter: brightness(1);
+    }
+    50% { 
+      opacity: 1;
+      filter: brightness(1.3);
+    }
+  }
+
+  input:focus, select:focus {
+    border-color: #00ffff !important;
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 0 0 2px rgba(0, 255, 255, 0.3) !important;
+  }
+
+  input:focus + .input-glow, select:focus + .input-glow {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5) !important;
+  }
+
+  .primary-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 35px rgba(0, 255, 255, 0.6);
+  }
+
+  .primary-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .secondary-button:hover {
+    background-color: rgba(0, 255, 255, 0.1);
+    border-color: rgba(0, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .refresh-button:hover:not(:disabled) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .tab:hover:not(.active-tab) {
+    background-color: rgba(0, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+
+  .table-row:hover {
+    background-color: rgba(0, 255, 255, 0.05);
+    transform: translateX(4px);
+  }
+
   @media (max-width: 1024px) {
     .header-content {
       flex-direction: column;
@@ -786,7 +1113,7 @@ const mediaQueries = `
     }
     
     .title {
-      font-size: 1.75rem;
+      font-size: 1.5rem;
     }
     
     .stats {
@@ -825,52 +1152,11 @@ const mediaQueries = `
       font-size: 1rem;
     }
   }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  input:focus, select:focus {
-    border-color: #3b82f6;
-    background-color: white;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .primary-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px -1px rgba(59, 130, 246, 0.4);
-  }
-
-  .primary-button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .secondary-button:hover {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-  }
-
-  .refresh-button:hover {
-    background-color: #e5e7eb;
-  }
-
-  .tab:hover:not(.active-tab) {
-    background-color: #f3f4f6;
-  }
-
-  .table-row:hover {
-    background-color: #f8fafc;
-    transform: translateX(4px);
-  }
 `;
 
-// Injection des styles
+// Injection des styles globaux
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
-  styleSheet.textContent = mediaQueries;
+  styleSheet.textContent = globalStyles;
   document.head.appendChild(styleSheet);
 }

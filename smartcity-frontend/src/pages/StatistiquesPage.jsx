@@ -12,7 +12,6 @@ export default function StatistiquesPage() {
     fetchStatistiques();
     fetchObservations();
   }, []);
-
   // --- Fetch toutes les statistiques ---
   const fetchStatistiques = async () => {
     try {
