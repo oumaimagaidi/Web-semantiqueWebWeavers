@@ -23,16 +23,70 @@ export default function AvisPage() {
     fetchPersonnes();
   }, []);
 
-  // Récupère tous les avis
+  // Récupère tous les avis - VERSION CORRIGÉE
   const fetchAvis = async () => {
     try {
       setLoading(true);
+      console.log("🔄 Chargement des avis depuis le backend...");
+      
       const res = await axios.get(`${BASE_URL}/avis/`);
-      setAvisList(res.data);
-      setMessage(null);
+      console.log("📦 Données brutes reçues:", res.data);
+      
+      if (!res.data || !Array.isArray(res.data)) {
+        console.error("❌ Format de données invalide");
+        setAvisList([]);
+        setMessage("❌ Format de données invalide reçu du serveur");
+        return;
+      }
+
+      // Transformation robuste des données
+      const transformedAvis = res.data.map(avis => {
+        // Extraire l'ID de l'URI
+        let avisId = avis.id;
+        if (avisId && avisId.includes('#')) {
+          avisId = avisId.split('#')[1];
+        } else if (avisId && avisId.includes('/')) {
+          avisId = avisId.split('/').pop();
+        }
+
+        // Gérer l'utilisateur
+        let utilisateur = 'Utilisateur inconnu';
+        if (avis.utilisateur) {
+          if (typeof avis.utilisateur === 'object') {
+            utilisateur = avis.utilisateur.nom || avis.utilisateur.id || 'Utilisateur';
+          } else if (typeof avis.utilisateur === 'string') {
+            // Extraire l'ID de l'URI utilisateur
+            utilisateur = avis.utilisateur.includes('#') 
+              ? avis.utilisateur.split('#')[1] 
+              : avis.utilisateur.includes('/')
+              ? avis.utilisateur.split('/').pop()
+              : avis.utilisateur;
+          }
+        }
+
+        // Gérer le type
+        let typeAvis = avis.type || 'Avis';
+        if (typeAvis && typeAvis.includes('#')) {
+          typeAvis = typeAvis.split('#')[1];
+        }
+
+        return {
+          id: avisId || avis.id,
+          type: typeAvis,
+          commentaire: avis.commentaire || '',
+          note: parseInt(avis.note) || 0,
+          utilisateur: utilisateur,
+          description: avis.commentaire || '',
+          avis: avisId || avis.id
+        };
+      });
+
+      console.log("✅ Avis transformés:", transformedAvis);
+      setAvisList(transformedAvis);
+      setMessage(`✅ ${transformedAvis.length} avis chargés avec succès`);
     } catch (err) {
-      console.error("Erreur lors du chargement des avis:", err);
-      setMessage("❌ Impossible de charger les avis.");
+      console.error("❌ Erreur lors du chargement des avis:", err);
+      setMessage("❌ Impossible de charger les avis. Vérifiez que le serveur est démarré.");
       setAvisList([]);
     } finally {
       setLoading(false);
@@ -43,6 +97,7 @@ export default function AvisPage() {
   const fetchPersonnes = async () => {
     try {
       const res = await axios.get(`${BASE_URL}/personnes/`);
+      console.log("👥 Personnes chargées:", res.data);
       setPersonnes(res.data);
     } catch (err) {
       console.error("Erreur lors du chargement des personnes:", err);
@@ -90,7 +145,7 @@ export default function AvisPage() {
     }
   };
 
-  // Filtrer les avis par utilisateur
+  // Filtrer les avis par utilisateur - VERSION CORRIGÉE
   const fetchAvisByUser = async (e) => {
     e.preventDefault();
     if (!filterUser.trim()) {
@@ -100,16 +155,18 @@ export default function AvisPage() {
 
     try {
       setLoading(true);
-      // Utiliser l'endpoint de recherche
-      const res = await axios.get(`${BASE_URL}/search/?query=${filterUser}`);
-      const filteredAvis = res.data.results.filter(item => 
-        item.type.includes("Avis") && item.label.includes(filterUser)
+      // Filtrer localement d'abord
+      const filteredAvis = avisList.filter(avis => 
+        avis.utilisateur.toLowerCase().includes(filterUser.toLowerCase()) ||
+        avis.commentaire.toLowerCase().includes(filterUser.toLowerCase()) ||
+        avis.id.toLowerCase().includes(filterUser.toLowerCase())
       );
+      
       setAvisList(filteredAvis);
-      setMessage(`📋 Avis de l'utilisateur '${filterUser}' (${filteredAvis.length} trouvés)`);
+      setMessage(`📋 ${filteredAvis.length} avis trouvés pour "${filterUser}"`);
     } catch (err) {
       console.error("Erreur lors du filtrage:", err);
-      setMessage("❌ Impossible de filtrer les avis.");
+      setMessage("❌ Erreur lors du filtrage");
     } finally {
       setLoading(false);
     }
@@ -152,6 +209,93 @@ export default function AvisPage() {
     if (note >= 4) return '#10b981';
     if (note >= 3) return '#f59e0b';
     return '#ef4444';
+  };
+
+  // Rendu du tableau des avis - VERSION CORRIGÉE
+  const renderAvisTable = () => {
+    if (loading) {
+      return (
+        <div style={styles.loadingState}>
+          <div style={styles.spinner}></div>
+          <p style={styles.loadingText}>Chargement des avis...</p>
+        </div>
+      );
+    }
+
+    if (avisList.length === 0) {
+      return (
+        <div style={styles.emptyState}>
+          <div style={styles.emptyIcon}>💬</div>
+          <div style={styles.emptyText}>Aucun avis trouvé</div>
+          <div style={styles.emptySubtext}>
+            {filterUser ? `Aucun avis pour "${filterUser}"` : 'Ajoutez un premier avis pour commencer'}
+          </div>
+          <button 
+            onClick={fetchAvis}
+            style={styles.primaryButton}
+          >
+            🔄 Réessayer
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div style={styles.tableWrapper}>
+        <table style={styles.table}>
+          <thead style={styles.tableHeader}>
+            <tr>
+              <th style={styles.tableHead}>ID</th>
+              <th style={styles.tableHead}>Type</th>
+              <th style={styles.tableHead}>Utilisateur</th>
+              <th style={styles.tableHead}>Note</th>
+              <th style={styles.tableHead}>Commentaire</th>
+            </tr>
+          </thead>
+          <tbody>
+            {avisList.map((avis, index) => (
+              <tr key={avis.id || index} style={styles.tableRow}>
+                <td style={styles.tableCell}>
+                  <span style={styles.avisId}>
+                    {avis.id}
+                  </span>
+                </td>
+                <td style={styles.tableCell}>
+                  <span 
+                    style={{
+                      ...styles.typeBadge,
+                      backgroundColor: getAvisTypeColor(avis.type)
+                    }}
+                  >
+                    {getAvisTypeIcon(avis.type)} {avis.type}
+                  </span>
+                </td>
+                <td style={styles.tableCell}>
+                  <span style={styles.userBadge}>
+                    👤 {avis.utilisateur}
+                  </span>
+                </td>
+                <td style={styles.tableCell}>
+                  <span 
+                    style={{
+                      ...styles.noteBadge,
+                      backgroundColor: getNoteColor(avis.note)
+                    }}
+                  >
+                    {'⭐'.repeat(avis.note)} ({avis.note}/5)
+                  </span>
+                </td>
+                <td style={styles.tableCell}>
+                  <div style={styles.commentaire}>
+                    {avis.commentaire || avis.description || 'Aucun commentaire'}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
@@ -334,7 +478,7 @@ export default function AvisPage() {
             <div style={styles.filterInputGroup}>
               <input
                 type="text"
-                placeholder="Entrez l'ID utilisateur à filtrer"
+                placeholder="Entrez le nom, ID ou commentaire à filtrer"
                 value={filterUser}
                 onChange={(e) => setFilterUser(e.target.value)}
                 style={styles.filterInput}
@@ -352,7 +496,7 @@ export default function AvisPage() {
                 style={styles.resetButton}
                 disabled={loading}
               >
-                ↻ Réinitialiser
+                ↻ Tout afficher
               </button>
             </div>
           </form>
@@ -362,92 +506,25 @@ export default function AvisPage() {
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>📋 Liste des avis ({avisList.length})</h3>
-            <button 
-              onClick={fetchAvis}
-              style={styles.refreshButton}
-              disabled={loading}
-            >
-              {loading ? '🔄' : '🔄'} Actualiser
-            </button>
+            <div style={styles.sectionActions}>
+              <button 
+                onClick={fetchAvis}
+                style={styles.refreshButton}
+                disabled={loading}
+              >
+                {loading ? '🔄' : '🔄'} Actualiser
+              </button>
+              <button 
+                onClick={() => console.log('Données avis:', avisList)}
+                style={styles.debugButton}
+              >
+                🐛 Debug
+              </button>
+            </div>
           </div>
 
           <div style={styles.tableCard}>
-            {loading ? (
-              <div style={styles.loadingState}>
-                <div style={styles.spinner}></div>
-                <p style={styles.loadingText}>Chargement des avis...</p>
-              </div>
-            ) : (
-              <>
-                <div style={styles.tableWrapper}>
-                  <table style={styles.table}>
-                    <thead style={styles.tableHeader}>
-                      <tr>
-                        <th style={styles.tableHead}>ID</th>
-                        <th style={styles.tableHead}>Type</th>
-                        <th style={styles.tableHead}>Utilisateur</th>
-                        <th style={styles.tableHead}>Note</th>
-                        <th style={styles.tableHead}>Commentaire</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {avisList.map((avis) => (
-                        <tr 
-                          key={avis.avis || avis.id} 
-                          style={styles.tableRow}
-                        >
-                          <td style={styles.tableCell}>
-                            <span style={styles.avisId}>
-                              {avis.avis || avis.id}
-                            </span>
-                          </td>
-                          <td style={styles.tableCell}>
-                            <span 
-                              style={{
-                                ...styles.typeBadge,
-                                backgroundColor: getAvisTypeColor(avis.type)
-                              }}
-                            >
-                              {getAvisTypeIcon(avis.type)} {avis.type}
-                            </span>
-                          </td>
-                          <td style={styles.tableCell}>
-                            <span style={styles.userBadge}>
-                              👤 {avis.utilisateur}
-                            </span>
-                          </td>
-                          <td style={styles.tableCell}>
-                            <span 
-                              style={{
-                                ...styles.noteBadge,
-                                backgroundColor: getNoteColor(avis.note)
-                              }}
-                            >
-                              {'⭐'.repeat(avis.note)} ({avis.note}/5)
-                            </span>
-                          </td>
-                          <td style={styles.tableCell}>
-                            <div style={styles.commentaire}>
-                              {avis.commentaire || avis.description}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {avisList.length === 0 && (
-                  <div style={styles.emptyState}>
-                    <div style={styles.emptyIcon}>💬</div>
-                    <div style={styles.emptyText}>Aucun avis trouvé</div>
-                    <div style={styles.emptySubtext}>
-                      {filterUser ? `Aucun avis pour l'utilisateur "${filterUser}"` : 'Ajoutez un avis pour commencer'}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            {renderAvisTable()}
           </div>
         </div>
       </div>
@@ -726,6 +803,11 @@ const styles = {
     alignItems: 'center',
     marginBottom: '1.5rem'
   },
+  sectionActions: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center'
+  },
   sectionTitle: {
     fontSize: '1.5rem',
     fontWeight: '600',
@@ -734,6 +816,17 @@ const styles = {
   refreshButton: {
     backgroundColor: '#f3f4f6',
     color: '#374151',
+    fontWeight: '500',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '0.75rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.3s ease'
+  },
+  debugButton: {
+    backgroundColor: '#fef3c7',
+    color: '#92400e',
     fontWeight: '500',
     padding: '0.75rem 1.25rem',
     borderRadius: '0.75rem',
@@ -865,127 +958,128 @@ const styles = {
   }
 };
 
-// Media queries et animations
-const mediaQueries = `
-  @media (max-width: 1024px) {
-    .header-content {
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-    
-    .stats {
-      align-self: flex-start;
-    }
-    
-    .form-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-      flex-direction: column;
-    }
-    
-    .primary-button, .secondary-button {
-      width: 100%;
-      justify-content: center;
-    }
-    
-    .filter-input-group {
-      flex-direction: column;
-    }
-    
-    .filter-input, .filter-button, .reset-button {
-      width: 100%;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .wrapper {
-      padding: 1.5rem 1rem;
-    }
-    
-    .title {
-      font-size: 1.75rem;
-    }
-    
-    .stats {
-      flex-direction: column;
-      width: 100%;
-    }
-    
-    .stat-item {
-      flex-direction: row;
-      justify-content: space-between;
-      width: 100%;
-    }
-    
-    .form-card, .filter-card, .table-card {
-      border-radius: 1rem;
-      padding: 1.5rem;
-    }
-    
-    .table-cell, .table-head {
-      padding: 1rem;
-    }
-    
-    .section-header {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  input:focus, select:focus, textarea:focus {
-    border-color: #8b5cf6;
-    background-color: white;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .primary-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px -1px rgba(139, 92, 246, 0.4);
-  }
-
-  .primary-button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .secondary-button:hover {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-  }
-
-  .filter-button:hover:not(:disabled) {
-    background-color: #059669;
-    transform: translateY(-1px);
-  }
-
-  .reset-button:hover:not(:disabled) {
-    background-color: #4b5563;
-    transform: translateY(-1px);
-  }
-
-  .refresh-button:hover:not(:disabled) {
-    background-color: #e5e7eb;
-  }
-
-  .table-row:hover {
-    background-color: #faf5ff;
-    transform: translateX(4px);
-  }
-`;
-
 // Injection des styles
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
-  styleSheet.textContent = mediaQueries;
+  styleSheet.textContent = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #8b5cf6;
+      background-color: white;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .primary-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px -1px rgba(139, 92, 246, 0.4);
+    }
+
+    .primary-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .secondary-button:hover {
+      background-color: #f3f4f6;
+      border-color: #d1d5db;
+    }
+
+    .filter-button:hover:not(:disabled) {
+      background-color: #059669;
+      transform: translateY(-1px);
+    }
+
+    .reset-button:hover:not(:disabled) {
+      background-color: #4b5563;
+      transform: translateY(-1px);
+    }
+
+    .refresh-button:hover:not(:disabled) {
+      background-color: #e5e7eb;
+    }
+
+    .debug-button:hover {
+      background-color: #fcd34d;
+    }
+
+    .table-row:hover {
+      background-color: #faf5ff;
+      transform: translateX(4px);
+    }
+
+    @media (max-width: 1024px) {
+      .header-content {
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      
+      .stats {
+        align-self: flex-start;
+      }
+      
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .form-actions {
+        flex-direction: column;
+      }
+      
+      .primary-button, .secondary-button {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .filter-input-group {
+        flex-direction: column;
+      }
+      
+      .filter-input, .filter-button, .reset-button {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .wrapper {
+        padding: 1.5rem 1rem;
+      }
+      
+      .title {
+        font-size: 1.75rem;
+      }
+      
+      .stats {
+        flex-direction: column;
+        width: 100%;
+      }
+      
+      .stat-item {
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+      }
+      
+      .form-card, .filter-card, .table-card {
+        border-radius: 1rem;
+        padding: 1.5rem;
+      }
+      
+      .table-cell, .table-head {
+        padding: 1rem;
+      }
+      
+      .section-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+    }
+  `;
   document.head.appendChild(styleSheet);
 }

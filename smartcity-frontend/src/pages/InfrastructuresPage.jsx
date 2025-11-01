@@ -7,12 +7,12 @@ export default function InfrastructuresPage() {
   const [form, setForm] = useState({
     id: "",
     nom: "",
-    type: "Route",
+    type_infrastructure: "Route",
     adresse: ""
   });
   const [message, setMessage] = useState(null);
 
-  // --- Charger les infrastructures ---
+  // --- Charger les infrastructures depuis l'API ---
   useEffect(() => {
     fetchInfras();
   }, []);
@@ -20,12 +20,45 @@ export default function InfrastructuresPage() {
   const fetchInfras = async () => {
     try {
       setLoading(true);
+      console.log("🔄 Chargement des infrastructures depuis l'API...");
+      
       const res = await axios.get("http://localhost:8000/infrastructures/");
-      setInfras(res.data);
-      setMessage(null);
+      
+      console.log("✅ Données reçues de l'API:", res.data);
+      
+      if (Array.isArray(res.data)) {
+        // TRANSFORMATION DES DONNÉES POUR LE FRONTEND
+        const transformedData = res.data.map(infra => ({
+          id: infra.id, // L'ID est déjà le nom court depuis le backend
+          nom: infra.nom || "Infrastructure sans nom",
+          type: infra.type, // Le backend retourne 'type' pas 'type_infrastructure'
+          adresse: infra.adresse || "Adresse non spécifiée"
+        }));
+        
+        console.log("🔄 Données transformées:", transformedData);
+        setInfras(transformedData);
+        setMessage(null);
+      } else {
+        console.error("❌ Format de données invalide:", res.data);
+        setMessage("❌ Format de données invalide reçu du serveur");
+        setInfras([]);
+      }
+      
     } catch (err) {
-      console.error("Erreur lors du chargement :", err);
-      setMessage("❌ Impossible de charger les infrastructures.");
+      console.error("❌ Erreur lors du chargement :", err);
+      
+      if (err.response) {
+        console.error("Status:", err.response.status);
+        console.error("Data:", err.response.data);
+        setMessage(`❌ Erreur serveur (${err.response.status}): ${err.response.data?.detail || 'Impossible de charger les données'}`);
+      } else if (err.request) {
+        console.error("Pas de réponse du serveur");
+        setMessage("❌ Serveur inaccessible. Vérifiez que le backend est démarré sur localhost:8000");
+      } else {
+        setMessage("❌ Erreur de connexion: " + err.message);
+      }
+      
+      setInfras([]);
     } finally {
       setLoading(false);
     }
@@ -37,23 +70,53 @@ export default function InfrastructuresPage() {
     setMessage(null);
     setLoading(true);
 
+    if (!form.id.trim() || !form.nom.trim()) {
+      setMessage("❌ L'ID et le nom sont obligatoires");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await axios.post("http://localhost:8000/add_infrastructure/", {
+      const payload = {
         id: form.id.trim(),
         nom: form.nom.trim(),
-        type: form.type.trim(),
+        type_infrastructure: form.type_infrastructure.trim(),
         adresse: form.adresse.trim()
-      });
+      };
+
+      console.log("📤 Envoi des données à l'API:", payload);
+
+      const res = await axios.post("http://localhost:8000/add_infrastructure/", payload);
+
+      console.log("✅ Réponse de l'API:", res.data);
 
       setMessage(res.data.message || "✅ Infrastructure ajoutée avec succès !");
-      setForm({ id: "", nom: "", type: "Route", adresse: "" });
-      fetchInfras();
+      setForm({ id: "", nom: "", type_infrastructure: "Route", adresse: "" });
+      
+      // Recharger les données après ajout
+      setTimeout(() => {
+        fetchInfras();
+      }, 1000);
+      
     } catch (err) {
-      console.error("Erreur d'ajout :", err);
-      setMessage(
-        err.response?.data?.detail ||
-        "❌ Erreur lors de l'ajout. Vérifiez la console pour plus de détails."
-      );
+      console.error("❌ Erreur d'ajout :", err);
+      
+      if (err.response) {
+        const errorData = err.response.data;
+        console.error("Détails de l'erreur:", errorData);
+        
+        if (errorData.detail) {
+          setMessage(`❌ ${errorData.detail}`);
+        } else if (errorData.error) {
+          setMessage(`❌ ${errorData.error}`);
+        } else {
+          setMessage("❌ Erreur lors de l'ajout de l'infrastructure");
+        }
+      } else if (err.request) {
+        setMessage("❌ Serveur inaccessible");
+      } else {
+        setMessage("❌ Erreur: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -74,6 +137,7 @@ export default function InfrastructuresPage() {
     { value: "Batiment", label: "🏢 Bâtiment", icon: "🏢" }
   ];
 
+  // CORRECTION : Utiliser 'type' au lieu de 'type_infrastructure'
   const getInfrastructureIcon = (type) => {
     const infraType = infrastructureTypes.find(t => t.value === type);
     return infraType ? infraType.icon : "🏗️";
@@ -89,6 +153,19 @@ export default function InfrastructuresPage() {
       'default': '#6b7280'
     };
     return colors[type] || colors.default;
+  };
+
+  // Fonction pour tester la connexion à l'API
+  const testAPIConnection = async () => {
+    try {
+      setMessage("🔄 Test de connexion à l'API...");
+      const testRes = await axios.get("http://localhost:8000/");
+      console.log("✅ Test API réussi:", testRes.data);
+      setMessage("✅ Connexion API réussie! " + testRes.data.message);
+    } catch (err) {
+      console.error("❌ Test API échoué:", err);
+      setMessage("❌ Impossible de se connecter à l'API. Vérifiez que le serveur est démarré.");
+    }
   };
 
   return (
@@ -108,6 +185,13 @@ export default function InfrastructuresPage() {
                 <span style={styles.statNumber}>{infras.length}</span>
                 <span style={styles.statLabel}>Infrastructures</span>
               </div>
+              <button 
+                onClick={testAPIConnection}
+                style={styles.testButton}
+                title="Tester la connexion à l'API"
+              >
+                🔌 Test API
+              </button>
             </div>
           </div>
         </div>
@@ -117,7 +201,8 @@ export default function InfrastructuresPage() {
           <div
             style={{
               ...styles.message,
-              ...(message.startsWith("✅") ? styles.successMessage : styles.errorMessage)
+              ...(message.startsWith("✅") ? styles.successMessage : 
+                   message.startsWith("🔄") ? styles.infoMessage : styles.errorMessage)
             }}
           >
             {message}
@@ -144,6 +229,7 @@ export default function InfrastructuresPage() {
                   onChange={(e) => handleInputChange("id", e.target.value)}
                   style={styles.input}
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -159,6 +245,7 @@ export default function InfrastructuresPage() {
                   onChange={(e) => handleInputChange("nom", e.target.value)}
                   style={styles.input}
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -168,10 +255,11 @@ export default function InfrastructuresPage() {
                   <span style={styles.required}>*</span>
                 </label>
                 <select
-                  value={form.type}
-                  onChange={(e) => handleInputChange("type", e.target.value)}
+                  value={form.type_infrastructure}
+                  onChange={(e) => handleInputChange("type_infrastructure", e.target.value)}
                   style={styles.select}
                   required
+                  disabled={loading}
                 >
                   {infrastructureTypes.map((type) => (
                     <option key={type.value} value={type.value}>
@@ -191,6 +279,7 @@ export default function InfrastructuresPage() {
                   value={form.adresse}
                   onChange={(e) => handleInputChange("adresse", e.target.value)}
                   style={styles.input}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -216,8 +305,9 @@ export default function InfrastructuresPage() {
 
               <button
                 type="button"
-                onClick={() => setForm({ id: "", nom: "", type: "Route", adresse: "" })}
+                onClick={() => setForm({ id: "", nom: "", type_infrastructure: "Route", adresse: "" })}
                 style={styles.secondaryButton}
+                disabled={loading}
               >
                 🔄 Réinitialiser
               </button>
@@ -225,24 +315,30 @@ export default function InfrastructuresPage() {
           </form>
         </div>
 
-        {/* Tableau */}
+        {/* Tableau - CORRIGÉ pour utiliser 'type' au lieu de 'type_infrastructure' */}
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>📋 Liste des Infrastructures</h3>
-            <button
-              onClick={fetchInfras}
-              style={styles.refreshButton}
-              disabled={loading}
-            >
-              {loading ? '🔄' : '🔄'} Actualiser
-            </button>
+            <h3 style={styles.sectionTitle}>
+              📋 Liste des Infrastructures 
+              <span style={styles.countBadge}>{infras.length}</span>
+            </h3>
+            <div style={styles.sectionActions}>
+              <button
+                onClick={fetchInfras}
+                style={styles.refreshButton}
+                disabled={loading}
+                title="Actualiser les données"
+              >
+                {loading ? '🔄' : '🔄'} Actualiser
+              </button>
+            </div>
           </div>
 
           <div style={styles.tableCard}>
             {loading ? (
               <div style={styles.loadingState}>
                 <div style={styles.spinner}></div>
-                <p style={styles.loadingText}>Chargement des infrastructures...</p>
+                <p style={styles.loadingText}>Chargement des infrastructures depuis la base de données...</p>
               </div>
             ) : (
               <>
@@ -270,32 +366,32 @@ export default function InfrastructuresPage() {
                               <div
                                 style={{
                                   ...styles.infraIcon,
-                                  backgroundColor: getInfrastructureColor(infra.type)
+                                  backgroundColor: getInfrastructureColor(infra.type) // CORRIGÉ: infra.type
                                 }}
                               >
-                                {getInfrastructureIcon(infra.type)}
+                                {getInfrastructureIcon(infra.type)} {/* CORRIGÉ: infra.type */}
                               </div>
                               <div>
                                 <div style={styles.infraName}>{infra.nom}</div>
                                 <div style={styles.infraDetails}>
-                                  Infrastructure urbaine
+                                  ID: {infra.id}
                                 </div>
                               </div>
                             </div>
                           </td>
                           <td style={styles.tableCell}>
                             <span style={styles.address}>
-                              {infra.adresse || "Non spécifiée"}
+                              {infra.adresse}
                             </span>
                           </td>
                           <td style={styles.tableCell}>
                             <span
                               style={{
                                 ...styles.typeBadge,
-                                backgroundColor: getInfrastructureColor(infra.type)
+                                backgroundColor: getInfrastructureColor(infra.type) // CORRIGÉ: infra.type
                               }}
                             >
-                              {getInfrastructureIcon(infra.type)} {infra.type}
+                              {getInfrastructureIcon(infra.type)} {infra.type} {/* CORRIGÉ: infra.type */}
                             </span>
                           </td>
                         </tr>
@@ -304,12 +400,24 @@ export default function InfrastructuresPage() {
                   </table>
                 </div>
 
-                {infras.length === 0 && (
+                {infras.length === 0 && !loading && (
                   <div style={styles.emptyState}>
                     <div style={styles.emptyIcon}>🏗️</div>
                     <div style={styles.emptyText}>Aucune infrastructure trouvée</div>
                     <div style={styles.emptySubtext}>
-                      Commencez par ajouter une nouvelle infrastructure
+                      {message ? (
+                        <div>
+                          <p>Impossible de charger les données depuis le serveur.</p>
+                          <button 
+                            onClick={fetchInfras}
+                            style={styles.retryButton}
+                          >
+                            🔄 Réessayer
+                          </button>
+                        </div>
+                      ) : (
+                        "Commencez par ajouter une nouvelle infrastructure"
+                      )}
                     </div>
                   </div>
                 )}
@@ -318,10 +426,19 @@ export default function InfrastructuresPage() {
           </div>
         </div>
       </div>
+
+      {/* Styles CSS */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
 
+// Les styles restent identiques...
 const styles = {
   container: {
     minHeight: '100vh',
@@ -363,7 +480,8 @@ const styles = {
   },
   stats: {
     display: 'flex',
-    gap: '1rem'
+    gap: '1rem',
+    alignItems: 'center'
   },
   statItem: {
     display: 'flex',
@@ -386,6 +504,16 @@ const styles = {
     color: '#6b7280',
     textAlign: 'center'
   },
+  testButton: {
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    padding: '0.5rem 1rem',
+    borderRadius: '0.5rem',
+    fontSize: '0.75rem',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s'
+  },
   message: {
     marginBottom: '2rem',
     padding: '1rem 1.5rem',
@@ -402,6 +530,11 @@ const styles = {
     backgroundColor: '#fef2f2',
     color: '#dc2626',
     border: '1px solid #fecaca'
+  },
+  infoMessage: {
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
+    border: '1px solid #dbeafe'
   },
   formCard: {
     backgroundColor: 'white',
@@ -528,7 +661,22 @@ const styles = {
   sectionTitle: {
     fontSize: '1.5rem',
     fontWeight: '600',
-    color: '#1f2937'
+    color: '#1f2937',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  countBadge: {
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '0.5rem',
+    fontSize: '0.75rem',
+    fontWeight: '600'
+  },
+  sectionActions: {
+    display: 'flex',
+    gap: '0.5rem'
   },
   refreshButton: {
     backgroundColor: '#f3f4f6',
@@ -665,118 +813,14 @@ const styles = {
     color: '#6b7280',
     fontSize: '1rem',
     maxWidth: '300px'
+  },
+  retryButton: {
+    backgroundColor: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    padding: '0.5rem 1rem',
+    borderRadius: '0.5rem',
+    cursor: 'pointer',
+    marginTop: '1rem'
   }
 };
-
-// Media queries et animations
-const mediaQueries = `
-  @media (max-width: 1024px) {
-    .header-content {
-      flex-direction: column;
-      gap: 1.5rem;
-    }
-    
-    .stats {
-      align-self: flex-start;
-    }
-    
-    .form-grid {
-      grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-      flex-direction: column;
-    }
-    
-    .primary-button, .secondary-button {
-      width: 100%;
-      justify-content: center;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .wrapper {
-      padding: 1.5rem 1rem;
-    }
-    
-    .title {
-      font-size: 1.75rem;
-    }
-    
-    .stats {
-      flex-direction: column;
-      width: 100%;
-    }
-    
-    .stat-item {
-      flex-direction: row;
-      justify-content: space-between;
-      width: 100%;
-    }
-    
-    .form-card, .table-card {
-      border-radius: 1rem;
-      padding: 1.5rem;
-    }
-    
-    .table-cell, .table-head {
-      padding: 1rem;
-    }
-    
-    .infra-info {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.5rem;
-    }
-    
-    .infra-icon {
-      width: 2.5rem;
-      height: 2.5rem;
-      font-size: 1rem;
-    }
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  input:focus, select:focus {
-    border-color: #059669;
-    background-color: white;
-    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
-    transform: translateY(-1px);
-  }
-
-  .primary-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px -1px rgba(5, 150, 105, 0.4);
-  }
-
-  .primary-button:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .secondary-button:hover {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-  }
-
-  .refresh-button:hover {
-    background-color: #e5e7eb;
-  }
-
-  .table-row:hover {
-    background-color: #f0fdf4;
-    transform: translateX(4px);
-  }
-`;
-
-// Injection des styles
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = mediaQueries;
-  document.head.appendChild(styleSheet);
-}

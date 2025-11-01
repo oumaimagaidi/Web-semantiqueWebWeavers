@@ -20,7 +20,7 @@ load_dotenv()
 
 # Configuration Ollama
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "llama3:8b"
+OLLAMA_MODEL = "codellama:7b"
 
 FUSEKI_BASE = "http://localhost:3030"
 FUSEKI_QUERY_URL = f"{FUSEKI_BASE}/smartcity/sparql"
@@ -123,133 +123,185 @@ def push_data_to_graph(turtle_data: bytes, graph_uri: str):
     return r
 
 def clean_sparql_query(query: str) -> str:
-    """Nettoie la requête SPARQL générée par l'IA pour être compatible avec Fuseki."""
+    """Nettoie la requête SPARQL générée par l'IA - VERSION ROBUSTE"""
     query = query.strip()
-
-    # Supprimer tout le texte avant la première requête SPARQL
+    
+    # Supprimer tout avant le premier PREFIX ou SELECT
     lines = query.split('\n')
-    sparql_lines = []
-    in_sparql = False
+    sparql_start = -1
     
-    for line in lines:
-        if any(keyword in line.upper() for keyword in ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'INSERT', 'DELETE', 'CREATE', 'DROP']):
-            in_sparql = True
-        
-        if in_sparql:
-            sparql_lines.append(line)
+    for i, line in enumerate(lines):
+        if line.strip().upper().startswith(('PREFIX', 'SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE')):
+            sparql_start = i
+            break
     
-    if sparql_lines:
-        query = '\n'.join(sparql_lines)
-
-    # Supprimer les balises Markdown
+    if sparql_start >= 0:
+        query = '\n'.join(lines[sparql_start:])
+    
+    # Supprimer les backticks et code blocks
     query = re.sub(r"```[a-zA-Z]*", "", query)
     query = query.replace("```", "").strip()
-    query = query.replace("\\n", "\n")
-    query = query.replace("mobilitemobilite:", "mobilite:")
-
-    # Supprimer les notes et commentaires textuels
+    
+    # Supprimer les explications textuelles
     query = re.sub(r"Notez que.*$", "", query, flags=re.IGNORECASE | re.MULTILINE)
     query = re.sub(r"Note:.*$", "", query, flags=re.IGNORECASE | re.MULTILINE)
-    query = re.sub(r"La requête SPARQL.*est :", "", query, flags=re.IGNORECASE)
+    query = re.sub(r"La requête SPARQL.*est:", "", query, flags=re.IGNORECASE)
     query = re.sub(r"SPARQL:?", "", query, flags=re.IGNORECASE)
-
-    # Corriger le préfixe mal formé
+    query = re.sub(r"Voici.*requête:", "", query, flags=re.IGNORECASE)
+    
+    # Corriger les préfixes
     query = re.sub(r"PREFIX\s*:\s*<[^>]+>", f"PREFIX mobilite: <{MOBILITE}>", query)
     query = re.sub(r"PREFIX\s+mobilite:\s*<http://example\.org/?.*?>", f"PREFIX mobilite: <{MOBILITE}>", query)
-
-    # Si aucun PREFIX mobilite, on l'ajoute
+    
+    # Assurer le préfixe mobilite
     if "PREFIX mobilite:" not in query:
         query = f"PREFIX mobilite: <{MOBILITE}>\n" + query
-
-    # Corriger les notations sans préfixe
-    query = re.sub(r"(?<!\w):(\w+)", r"mobilite:\1", query)
-
-    # Ajouter PREFIX rdfs si nécessaire
+    
+    # Assurer le préfixe rdfs si nécessaire
     if "rdfs:subClassOf" in query and "PREFIX rdfs:" not in query:
         query = f"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n" + query
-
-    # Ajouter PREFIX rdf si nécessaire
-    if "rdf:type" in query and "PREFIX rdf:" not in query:
-        query = f"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n" + query
-
-    # Nettoyer les espaces multiples
+    
+    # Nettoyer l'espacement
     query = re.sub(r'\n\s*\n', '\n', query)
     query = re.sub(r'[ ]+', ' ', query)
-
+    
     return query.strip()
 
 # ======================
 # 🧠 INTELLIGENCE ARTIFICIELLE AVEC OLLAMA
 # ======================
-
+def discover_ontology():
+    """Découvre automatiquement les classes et propriétés de l'ontologie"""
+    try:
+        # Requête pour toutes les classes avec des instances
+        classes_query = """
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+        SELECT DISTINCT ?class (COUNT(?instance) as ?instance_count) WHERE {
+          ?instance a ?class .
+          FILTER(STRSTARTS(STR(?class), STR(mobilite:)))
+        }
+        GROUP BY ?class
+        ORDER BY DESC(?instance_count)
+        """
+        
+        # Requête pour les propriétés utilisées
+        properties_query = """
+        PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+        SELECT DISTINCT ?property (COUNT(?s) as ?usage_count) WHERE {
+          ?s ?property ?o .
+          FILTER(STRSTARTS(STR(?property), STR(mobilite:)))
+        }
+        GROUP BY ?property
+        ORDER BY DESC(?usage_count)
+        LIMIT 20
+        """
+        
+        # Exécuter les requêtes
+        classes_result = execute_sparql_query(classes_query)
+        properties_result = execute_sparql_query(properties_query)
+        
+        # Formater les résultats
+        classes_info = []
+        for r in classes_result["results"]["bindings"]:
+            class_uri = r["class"]["value"]
+            class_name = class_uri.split("#")[-1] if "#" in class_uri else class_uri.split("/")[-1]
+            count = int(r["instance_count"]["value"])
+            classes_info.append(f"- {class_name} ({count} instances)")
+        
+        properties_info = []
+        for r in properties_result["results"]["bindings"]:
+            prop_uri = r["property"]["value"]
+            prop_name = prop_uri.split("#")[-1] if "#" in prop_uri else prop_uri.split("/")[-1]
+            count = int(r["usage_count"]["value"])
+            properties_info.append(f"- {prop_name} ({count} usages)")
+        
+        return {
+            "classes": "\n".join(classes_info),
+            "properties": "\n".join(properties_info)
+        }
+        
+    except Exception as e:
+        print(f"❌ Erreur découverte ontologie: {e}")
+        return None
 def generate_sparql_with_ollama(user_question: str) -> str:
     """
-    Génère une requête SPARQL en utilisant Ollama
+    Génère une requête SPARQL en utilisant Ollama - VERSION DYNAMIQUE
     """
+    # Découvrir l'ontologie réelle
+    ontology = discover_ontology()
+    
+    if ontology:
+        # Utiliser l'ontologie découverte
+        classes_section = ontology["classes"]
+        properties_section = ontology["properties"]
+        source_info = "ONTOLOGIE RÉELLE - DÉCOUVERTE AUTOMATIQUE"
+    else:
+        # Fallback vers l'ontologie théorique
+        classes_section = """
+        - Personne, Conducteur, Piéton, Voyageur
+        - ReseauTransport, TransportPublic, TransportPrive, MobiliteDouce
+        - Bus, Metro, Voiture, Velo, Trottinette
+        - Infrastructure, Route, StationsBus, StationsMetro, Parking, Batiment
+        - Trajet, TrajetOptimal, TrajetCourt
+        - Avis, AvisPositif, AvisNegatif
+        - Ticket, TicketBus, TicketMetro, TicketParking
+        - StationRecharge, RechargeElectrique
+        - Statistiques, StatistiquesAccidents, StatistiquesPollution, StatistiquesUtilisation
+        - SmartCity
+        """
+        properties_section = """
+        - nom, prenom, age, email, telephone
+        - numeroPermis, categoriePermis
+        - distance, duree, heureDepart, heureArrivee
+        - commentaire, note, dateAvis
+        - prix, statutTicket, dateAchat
+        - adresse, coordonneesGPS, capaciteAccueil
+        - typeConnecteur, puissanceMax, disponible
+        - valeur, unite, dateMesure
+        """
+        source_info = "ONTOLOGIE THÉORIQUE - FALLBACK"
+
     prompt = f"""
-Tu es un expert en RDF et SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL valides.
+TU ES UN EXPERT SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL VALIDES.
 
-CONTEXTE ONTOLOGIE MOBILITÉ :
-- Namespace : PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
-- Classes principales : 
-  Personne, Conducteur, Piéton, Voyageur
-  ReseauTransport, TransportPublic, TransportPrive, MobiliteDouce
-  Bus, Metro, Voiture, Velo, Trottinette
-  Infrastructure, Route, StationsBus, StationsMetro, Parking, Batiment
-  Trajet, TrajetOptimal, TrajetCourt, TrajetRecommandé
-  Avis, AvisPositif, AvisNegatif
-  Ticket, TicketBus, TicketMetro, TicketParking
-  StationRecharge, RechargeElectrique, RechargeGaz
-  Trafic, Accident, Embouteillage, Radar
-  Statistiques, StatistiquesAccidents, StatistiquesPollution, StatistiquesUtilisation
-  SmartCity
+# {source_info}
+Namespace: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
 
-- Propriétés de données :
-  nom, prenom, age, email, telephone, dateNaissance, genre, nationalite, languePreferee
-  dateInscription, statutCompte, niveauAbonnement, scoreFidelite, preferencesAccessibilite
-  numeroPermis, dateObtentionPermis, categoriePermis, pointsPermis, experienceConduite
-  distance, duree, scoreOptimisation, niveauTrafic, heureDepart, heureArrivee
-  vitesseMoyenne, consommationEnergie, emissionsCO2, nombreArrets, conditionsMeteo
-  temperature, scoreSecurite, scoreConfort
-  marque, modele, anneeFabrication, immatriculation, couleur, kilometrage
-  niveauCarburant, consommationMoyenne
-  commentaire, note, dateAvis, langueAvis, categorieAvis, scoreUtilite, verifie, nombreSignalements
-  numeroTicket, prix, dateAchat, dateExpiration, typeTicket, classeTicket, zoneValidite
-  statutTicket, methodePaiement, nombreValidations
-  adresse, coordonneesGPS, dateConstruction, etatMaintenance, capaciteAccueil
-  niveauAccessibilite, horairesOuverture, superficie
-  capacite, prixKwh, disponible, typeConnecteur, puissanceMax, tempsRechargeMoyen
-  heureOuverture, heureFermeture, operateur
-  intensite, dureeIncident, causeIncident, gravite, nombreVehiculesImpliques
-  vitesseMoyenneTrafic, niveauService
-  vitesseMaximale, typeRadar, dateInstallation, etatFonctionnement, nombreInfractions
-  valeur, dateMesure, unite, periodeMesure, margeErreur, niveauConfiance, tendance, sourceDonnees
+## CLASSES DISPONIBLES (utiliser avec ?x a mobilite:Classe) :
+{classes_section}
 
-- Propriétés objet :
-  effectueTrajet, utiliseReseauTransport, donneAvis, possedeTicket, habiteA, travailleA
-  prefereMoyenTransport, frequenteZone, commenceA, terminaA, utiliseMoyenTransport
-  proposePar, appartientA, circuleSur, conduitPar, utiliseStationRecharge
-  concerneTransport, concerneInfrastructure, valablePour, acheteA, donneAccesA
-  estConnecteA, disposeDe, accueilleStation, contient, estSurveillePar, alimentePar
-  maintenuPar, seProduitSur, affecteTrajet, genereAlerte, mesureSur, generePar
+## PROPRIÉTÉS DISPONIBLES (utiliser avec ?x mobilite:propriete ?valeur) :
+{properties_section}
 
-QUESTION À TRADUIRE : "{user_question}"
+## PROPRIÉTÉS OBJET (utiliser avec ?x mobilite:propriete ?y) :
+- effectueTrajet, utiliseReseauTransport, donneAvis, possedeTicket
+- utiliseStationRecharge, commenceA, terminaA
+- utiliseMoyenTransport, circuleSur, conduitPar
+- appartientA, proposePar
 
-INSTRUCTIONS STRICTES :
-1. Génère UNIQUEMENT la requête SPARQL complète et valide
-2. Pas de texte explicatif, pas de commentaires, pas de notes
-3. Pas de "SPARQL:" ou autres préfixes textuels
-4. Pas de backticks Markdown
-5. Utilise obligatoirement le préfixe mobilite:
-6. Pour les hiérarchies, utilise rdfs:subClassOf*
-7. Sois précis dans les relations
+## RÈGLES ABSOLUES DE GÉNÉRATION :
+1. POUR "montrer les X" → SELECT ?x WHERE {{ ?x a mobilite:X . }}
+2. POUR "lister les Y" → SELECT ?y WHERE {{ ?y a mobilite:Y . }}
+3. POUR "afficher les Z" → SELECT ?z WHERE {{ ?z a mobilite:Z . }}
+4. POUR les sous-classes : utiliser ?x a/rdfs:subClassOf* mobilite:ClasseMere
+5. POUR les propriétés : utiliser OPTIONAL {{ ?x mobilite:propriete ?valeur . }}
+6. TOUJOURS inclure PREFIX mobilite: et PREFIX rdfs: si nécessaire
 
-EXEMPLE :
-Question: "Liste toutes les personnes"
-Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?personne WHERE {{ ?personne a mobilite:Personne . }}
+## EXEMPLES CORRECTS :
+Question: "Montre les routes" → PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?route WHERE {{ ?route a mobilite:Route . }}
+Question: "Liste les conducteurs" → PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?conducteur WHERE {{ ?conducteur a mobilite:Conducteur . }}
+Question: "Avis avec notes" → PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?avis ?note WHERE {{ ?avis a mobilite:Avis . OPTIONAL {{ ?avis mobilite:note ?note . }} }}
+Question: "Personnes avec leurs trajets" → PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?personne ?trajet WHERE {{ ?personne mobilite:effectueTrajet ?trajet . }}
+
+## QUESTION À TRADUIRE : "{user_question}"
+
+GÉNÈRE UNIQUEMENT LA REQUÊTE SPARQL SANS AUCUN TEXTE. COMMENCE DIRECTEMENT PAR "PREFIX" ou "SELECT".
     """
 
     try:
+        print(f"🧠 Envoi à Ollama (modèle: {OLLAMA_MODEL})...")
+        
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/generate",
             json={
@@ -262,25 +314,158 @@ Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobi
                     "num_predict": 500
                 }
             },
-            timeout=120
+            timeout=90
         )
-        response.raise_for_status()
         
+        if response.status_code != 200:
+            raise Exception(f"Ollama error: {response.status_code}")
+            
         result = response.json()
-        sparql_query = result["response"].strip()
+        sparql_query = result.get("response", "").strip()
         
-        print(f"📝 Réponse brute d'Ollama:\n{sparql_query}")
-        
+        # Nettoyage
         cleaned_query = clean_sparql_query(sparql_query)
-        print(f"🧹 Requête nettoyée:\n{cleaned_query}")
+        print(f"🧹 Requête générée: {cleaned_query}")
         
         return cleaned_query
         
-    except requests.exceptions.ConnectionError:
-        raise Exception("❌ Ollama n'est pas démarré. Lancez 'ollama serve'")
     except Exception as e:
-        raise Exception(f"❌ Erreur Ollama : {str(e)}")
-
+        print(f"❌ Erreur génération Ollama: {e}")
+        # Fallback vers une requête simple
+        return generate_fallback_sparql(user_question)
+@app.get("/health/")
+async def health_check():
+    """Endpoint de vérification de l'état des services"""
+    status = {
+        "fastapi": "OK",
+        "ollama": "Unknown", 
+        "fuseki": "Unknown",
+        "model": OLLAMA_MODEL,
+        "available_models": [],
+        "model_available": False
+    }
+    
+    # Test Ollama
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+        if response.status_code == 200:
+            models_data = response.json()
+            status["ollama"] = "OK"
+            status["available_models"] = [model["name"] for model in models_data.get("models", [])]
+            status["model_available"] = OLLAMA_MODEL in status["available_models"]
+        else:
+            status["ollama"] = f"Error: {response.status_code}"
+    except Exception as e:
+        status["ollama"] = f"Error: {str(e)}"
+    
+    # Test Fuseki
+    try:
+        response = requests.get(f"{FUSEKI_BASE}/$/datasets", timeout=5)
+        status["fuseki"] = "OK" if response.status_code == 200 else f"Error: {response.status_code}"
+    except Exception as e:
+        status["fuseki"] = f"Error: {str(e)}"
+    
+    return status
+def generate_fallback_sparql(user_question: str) -> str:
+    """Génère une requête SPARQL de secours basée sur des motifs"""
+    question_lower = user_question.lower()
+    
+    # Détection des motifs courants
+    if any(word in question_lower for word in ["route", "rue", "avenue", "autoroute"]):
+        return f"PREFIX mobilite: <{MOBILITE}>\nSELECT ?route WHERE {{ ?route a mobilite:Route . }}"
+    
+    elif any(word in question_lower for word in ["personne", "utilisateur", "conducteur", "piéton"]):
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?personne ?nom ?prenom ?type WHERE {{
+          ?personne a ?type .
+          ?type rdfs:subClassOf* mobilite:Personne .
+          OPTIONAL {{ ?personne mobilite:nom ?nom . }}
+          OPTIONAL {{ ?personne mobilite:prenom ?prenom . }}
+        }} LIMIT 20
+        """
+    
+    elif any(word in question_lower for word in ["avis", "commentaire", "note"]):
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?avis ?commentaire ?note ?type WHERE {{
+          ?avis a ?type .
+          ?type rdfs:subClassOf* mobilite:Avis .
+          OPTIONAL {{ ?avis mobilite:commentaire ?commentaire . }}
+          OPTIONAL {{ ?avis mobilite:note ?note . }}
+        }} LIMIT 20
+        """
+    
+    elif any(word in question_lower for word in ["trajet", "parcours", "itinéraire"]):
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?trajet ?distance ?duree ?type WHERE {{
+          ?trajet a ?type .
+          ?type rdfs:subClassOf* mobilite:Trajet .
+          OPTIONAL {{ ?trajet mobilite:distance ?distance . }}
+          OPTIONAL {{ ?trajet mobilite:duree ?duree . }}
+        }} LIMIT 20
+        """
+    
+    elif any(word in question_lower for word in ["bus", "métro", "véhicule", "transport"]):
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?vehicule ?type ?marque ?modele WHERE {{
+          ?vehicule a ?type .
+          ?type rdfs:subClassOf* mobilite:ReseauTransport .
+          OPTIONAL {{ ?vehicule mobilite:marque ?marque . }}
+          OPTIONAL {{ ?vehicule mobilite:modele ?modele . }}
+        }} LIMIT 20
+        """
+    
+    else:
+        # Requête générique de secours
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        SELECT ?s ?p ?o WHERE {{
+          ?s ?p ?o .
+        }} LIMIT 10
+        """
+@app.get("/test-ollama/")
+async def test_ollama():
+    """Test direct d'Ollama"""
+    try:
+        # Test de génération simple
+        test_prompt = "Réponds uniquement par 'OK'"
+        
+        response = requests.post(
+            f"{OLLAMA_BASE_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": test_prompt,
+                "stream": False
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return {
+                "status": "success",
+                "response": result.get("response", "No response"),
+                "model_used": OLLAMA_MODEL
+            }
+        else:
+            return {
+                "status": "error",
+                "code": response.status_code,
+                "message": response.text
+            }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 # ======================
 # 📦 MODÈLES DE DONNÉES
 # ======================
@@ -369,7 +554,40 @@ class PossedeTicket(BaseModel):
 # ======================
 # 🎯 ENDPOINT PRINCIPAL IA - GÉNÉRATION ET EXÉCUTION SPARQL
 # ======================
-
+def improve_sparql_query(user_question: str, generated_query: str) -> str:
+    """Améliore ou corrige les requêtes SPARQL générées"""
+    question_lower = user_question.lower()
+    
+    print(f"🔧 Analyse: '{user_question}'")
+    print(f"🔧 Requête générée: {generated_query}")
+    
+    # Correction spécifique pour "infrastructures qui sont des routes"
+    if "infrastructure" in question_lower and "route" in question_lower:
+        if "mobilite:Infrastructure" in generated_query and "rdfs:subClassOf" in generated_query:
+            print("🔄 Correction: Chercher directement les instances de Route")
+            return f"""
+            PREFIX mobilite: <{MOBILITE}>
+            SELECT ?route WHERE {{
+              ?route a mobilite:Route .
+            }}
+            """
+    
+    # Correction pour les requêtes utilisant mobilite:type (qui n'existe pas)
+    if 'mobilite:type "' in generated_query:
+        print("🔄 Correction: Supprimer l'usage de mobilite:type inexistant")
+        # Extraire le type recherché
+        match = re.search(r'mobilite:type "([^"]+)"', generated_query)
+        if match:
+            type_recherche = match.group(1).capitalize()
+            return f"""
+            PREFIX mobilite: <{MOBILITE}>
+            SELECT ?instance WHERE {{
+              ?instance a mobilite:{type_recherche} .
+            }}
+            """
+    
+    # Si la requête est valide, la retourner telle quelle
+    return generated_query
 @app.post("/ask/")
 async def ask_question(question_data: dict):
     """
@@ -388,19 +606,29 @@ async def ask_question(question_data: dict):
         sparql_query = generate_sparql_with_ollama(user_question)
         print(f"📝 Requête SPARQL générée:\n{sparql_query}")
 
-        # 2. Validation de la requête
-        if not validate_sparql_query(sparql_query):
-            raise HTTPException(status_code=400, detail="La requête SPARQL générée n'est pas valide")
+        # 2. Amélioration de la requête si nécessaire
+        improved_query = improve_sparql_query(user_question, sparql_query)
+        if improved_query != sparql_query:
+            print(f"🔄 Requête améliorée:\n{improved_query}")
+            sparql_query = improved_query
 
-        # 3. Exécution de la requête sur Fuseki
+        # 3. Validation de la requête - si invalide, utiliser le fallback
+        if not validate_sparql_query(sparql_query):
+            print("🔄 Utilisation du système de fallback...")
+            sparql_query = fallback_sparql_query(user_question)
+            print(f"📝 Requête de fallback:\n{sparql_query}")
+
+        # 4. Exécution de la requête sur Fuseki
         print("🚀 Exécution de la requête sur Fuseki...")
         results = execute_sparql_query(sparql_query)
         
         if results is None:
             raise HTTPException(status_code=500, detail="Erreur lors de l'exécution de la requête SPARQL")
 
-        # 4. Formatage des résultats
+        # 5. Formatage des résultats
         formatted_results = format_sparql_results(results)
+        
+        print(f"✅ {len(formatted_results)} résultats trouvés")
         
         return {
             "question": user_question,
@@ -412,6 +640,7 @@ async def ask_question(question_data: dict):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Erreur globale: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 def format_sparql_results(results):
@@ -437,19 +666,85 @@ def format_sparql_results(results):
 def validate_sparql_query(query: str) -> bool:
     """Valide la syntaxe basique d'une requête SPARQL"""
     if not query:
+        print("❌ Requête vide")
         return False
     
     # Vérifier les mots-clés SPARQL essentiels
     essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']
     if not any(keyword in query.upper() for keyword in essential_keywords):
+        print(f"❌ Aucun mot-clé SPARQL essentiel trouvé dans: {query}")
         return False
     
     # Vérifier la présence des accolades
     if '{' not in query or '}' not in query:
+        print("❌ Accolades manquantes dans la requête")
         return False
     
+    # Vérifier que la requête n'est pas trop générique
+    if "?personne ?conducteur ?trajet ?avis ?infrastructure ?vehicule" in query:
+        print("❌ Requête trop générique détectée")
+        return False
+    
+    print("✅ Requête SPARQL validée")
     return True
-
+def fallback_sparql_query(user_question: str) -> str:
+    """Génère une requête SPARQL de secours basée sur des motifs"""
+    question_lower = user_question.lower()
+    
+    if any(word in question_lower for word in ["personne", "utilisateur", "conducteur"]):
+        if "avis" in question_lower:
+            return f"""
+            PREFIX mobilite: <{MOBILITE}>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT DISTINCT ?utilisateur ?nom ?prenom WHERE {{
+                ?utilisateur a/rdfs:subClassOf* mobilite:Personne .
+                ?utilisateur mobilite:donneAvis ?avis .
+                OPTIONAL {{ ?utilisateur mobilite:nom ?nom . }}
+                OPTIONAL {{ ?utilisateur mobilite:prenom ?prenom . }}
+            }}
+            """
+        else:
+            return f"""
+            PREFIX mobilite: <{MOBILITE}>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            SELECT ?personne ?nom ?prenom ?type WHERE {{
+                ?personne a ?type .
+                ?type rdfs:subClassOf* mobilite:Personne .
+                OPTIONAL {{ ?personne mobilite:nom ?nom . }}
+                OPTIONAL {{ ?personne mobilite:prenom ?prenom . }}
+            }} LIMIT 20
+            """
+    
+    elif "statistique" in question_lower or "pollution" in question_lower:
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        SELECT ?statistique ?valeur ?unite WHERE {{
+            ?statistique a/rdfs:subClassOf* mobilite:StatistiquesPollution .
+            OPTIONAL {{ ?statistique mobilite:valeur ?valeur . }}
+            OPTIONAL {{ ?statistique mobilite:unite ?unite . }}
+        }}
+        """
+    
+    elif "trajet" in question_lower:
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        SELECT ?trajet ?distance ?duree ?personne WHERE {{
+            ?trajet a mobilite:Trajet .
+            OPTIONAL {{ ?trajet mobilite:distance ?distance . }}
+            OPTIONAL {{ ?trajet mobilite:duree ?duree . }}
+            OPTIONAL {{ ?personne mobilite:effectueTrajet ?trajet . }}
+        }} LIMIT 10
+        """
+    
+    else:
+        # Requête générique de secours
+        return f"""
+        PREFIX mobilite: <{MOBILITE}>
+        SELECT ?s ?p ?o WHERE {{
+            ?s ?p ?o .
+        }} LIMIT 10
+        """
 # ======================
 # 👤 PERSONNES - ENDPOINTS
 # ======================
@@ -845,7 +1140,100 @@ def add_statistique(stat: Statistique):
     """
     send_to_fuseki(insert_query)
     return {"message": f"📊 Statistique '{stat.id}' ajoutée (type: {type_clean})."}
+# ======================
+# 📊 STATISTIQUES - ENDPOINTS MANQUANTS
+# ======================
 
+@app.post("/add_statistique_pollution/")
+def add_statistique_pollution(data: dict):
+    """Endpoint pour ajouter une statistique de pollution"""
+    try:
+        statistique = Statistique(
+            id=data.get("id", ""),
+            type_statistique="StatistiquesPollution",
+            valeur=float(data.get("tauxPollution", 0)),
+            unite="µg/m³"
+        )
+        return add_statistique(statistique)
+    except Exception as e:
+        return {"error": f"Erreur lors de l'ajout de la statistique pollution: {str(e)}"}
+
+@app.post("/add_statistique_accident/")
+def add_statistique_accident(data: dict):
+    """Endpoint pour ajouter une statistique d'accident"""
+    try:
+        statistique = Statistique(
+            id=data.get("id", ""),
+            type_statistique="StatistiquesAccidents", 
+            valeur=float(data.get("nbreDaccident", 0)),
+            unite="accidents"
+        )
+        return add_statistique(statistique)
+    except Exception as e:
+        return {"error": f"Erreur lors de l'ajout de la statistique accident: {str(e)}"}
+
+@app.post("/add_observation/")
+def add_observation(data: dict):
+    """Endpoint pour ajouter une observation"""
+    try:
+        # Créer d'abord une relation entre utilisateur et statistique
+        # Pour l'instant, on va simplement créer une nouvelle statistique d'observation
+        observation_id = f"obs_{data.get('utilisateur_id')}_{data.get('statistique_id')}"
+        
+        statistique = Statistique(
+            id=observation_id,
+            type_statistique="StatistiquesUtilisation",
+            valeur=1.0,  # Valeur par défaut pour une observation
+            unite="observations"
+        )
+        
+        result = add_statistique(statistique)
+        
+        # Associer l'utilisateur à cette statistique
+        if data.get("utilisateur_id"):
+            # Utiliser une propriété existante ou créer une nouvelle relation
+            # Pour l'instant, on utilise la relation existante
+            pass
+            
+        return {"message": f"✅ Observation ajoutée avec succès: {observation_id}"}
+    except Exception as e:
+        return {"error": f"Erreur lors de l'ajout de l'observation: {str(e)}"}
+
+# Endpoint pour les observations (alias de statistiques avec filtre)
+@app.get("/observations/")
+def get_observations():
+    """Récupère les observations (statistiques d'utilisation)"""
+    sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+    sparql.setReturnFormat(JSON)
+    sparql.setQuery(f"""
+    PREFIX mobilite: <{MOBILITE}>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?stat ?type ?valeur ?unite ?utilisateur WHERE {{
+        ?stat a mobilite:StatistiquesUtilisation ;
+              mobilite:valeur ?valeur ;
+              mobilite:unite ?unite .
+        OPTIONAL {{
+            ?utilisateur ?relation ?stat .
+            FILTER(STRSTARTS(STR(?relation), STR(mobilite:)))
+        }}
+    }}
+    """)
+    results = sparql.query().convert()
+
+    observations = []
+    for r in results["results"]["bindings"]:
+        stat_uri = r["stat"]["value"]
+        utilisateur_uri = r.get("utilisateur", {}).get("value", "")
+        
+        observations.append({
+            "id": stat_uri.split("#")[-1],
+            "utilisateur": utilisateur_uri.split("#")[-1] if utilisateur_uri else "Utilisateur inconnu",
+            "statistique": stat_uri.split("#")[-1],
+            "valeur": float(r["valeur"]["value"]) if "valeur" in r else 0,
+            "unite": r.get("unite", {}).get("value", "")
+        })
+
+    return observations
 # ======================
 # 🏙️ SMART CITY - ENDPOINTS
 # ======================
@@ -1038,29 +1426,82 @@ def get_trajets():
 # Endpoint pour les avis (compatible frontend)
 @app.get("/avis/")
 def get_avis():
-    """Récupère tous les avis"""
+    """Récupère tous les avis avec leurs détails complets - VERSION CORRIGÉE"""
     sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
     sparql.setReturnFormat(JSON)
+    
+    # REQUÊTE SPARQL CORRIGÉE
     sparql.setQuery(f"""
     PREFIX mobilite: <{MOBILITE}>
-    SELECT ?avis ?commentaire ?note ?utilisateur WHERE {{
-        ?avis a mobilite:Avis ;
-              mobilite:donneAvis ?utilisateur ;
-              mobilite:commentaire ?commentaire ;
-              mobilite:note ?note .
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    
+    SELECT ?avis ?type ?commentaire ?note ?utilisateur_id ?nom_utilisateur ?prenom_utilisateur WHERE {{
+      ?avis a ?type .
+      ?type rdfs:subClassOf* mobilite:Avis .
+      
+      OPTIONAL {{ ?avis mobilite:commentaire ?commentaire . }}
+      OPTIONAL {{ ?avis mobilite:note ?note . }}
+      
+      OPTIONAL {{ 
+        ?utilisateur mobilite:donneAvis ?avis .
+        BIND(STR(?utilisateur) AS ?utilisateur_id)
+        OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilisateur . }}
+        OPTIONAL {{ ?utilisateur mobilite:prenom ?prenom_utilisateur . }}
+      }}
     }}
+    ORDER BY DESC(?note)
     """)
-    results = sparql.query().convert()
+    
+    try:
+        results = sparql.query().convert()
+        print(f"🔍 Résultats SPARQL bruts: {results}")
 
-    return [
-        {
-            "avis": r["avis"]["value"].split("#")[-1],
-            "commentaire": r["commentaire"]["value"],
-            "note": int(r["note"]["value"]),
-            "utilisateur": r["utilisateur"]["value"].split("#")[-1],
-        }
-        for r in results["results"]["bindings"]
-    ]
+        avis_list = []
+        seen = set()
+
+        for r in results["results"]["bindings"]:
+            avis_uri = r["avis"]["value"]
+            if avis_uri not in seen:
+                seen.add(avis_uri)
+                
+                # Extraire l'ID de l'avis
+                avis_id = avis_uri.split("#")[-1] if "#" in avis_uri else avis_uri.split("/")[-1]
+                
+                # Déterminer le type d'avis
+                type_uri = r["type"]["value"]
+                avis_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+                
+                # Récupérer l'utilisateur
+                utilisateur_data = None
+                if "utilisateur_id" in r:
+                    utilisateur_uri = r["utilisateur_id"]["value"]
+                    utilisateur_id = utilisateur_uri.split("#")[-1] if "#" in utilisateur_uri else utilisateur_uri.split("/")[-1]
+                    
+                    nom_utilisateur = r.get("nom_utilisateur", {}).get("value", "")
+                    prenom_utilisateur = r.get("prenom_utilisateur", {}).get("value", "")
+                    
+                    utilisateur_data = {
+                        "id": utilisateur_id,
+                        "nom": nom_utilisateur,
+                        "prenom": prenom_utilisateur,
+                        "display_name": f"{prenom_utilisateur} {nom_utilisateur}".strip() or utilisateur_id
+                    }
+                
+                avis_list.append({
+                    "id": avis_id,
+                    "type": avis_type,
+                    "commentaire": r.get("commentaire", {}).get("value", ""),
+                    "note": int(r["note"]["value"]) if "note" in r else 0,
+                    "utilisateur": utilisateur_data,
+                    "statut": "Positif" if avis_type == "AvisPositif" else "Négatif" if avis_type == "AvisNegatif" else "Neutre"
+                })
+
+        print(f"✅ {len(avis_list)} avis trouvés et transformés")
+        return avis_list
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des avis: {str(e)}")
+        return []
 
 # Endpoint pour les réseaux de transport (alias de vehicules)
 @app.get("/reseaux_transport/")

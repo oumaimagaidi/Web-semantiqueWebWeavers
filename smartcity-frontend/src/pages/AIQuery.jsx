@@ -16,7 +16,7 @@ export default function AIQuery() {
     setError(null);
     
     try {
-      const res = await axios.post("http://localhost:8000/ask_ia/", { question });
+      const res = await axios.post("http://localhost:8000/ask/", { question });
       setResult(res.data);
       
       // Ajouter à l'historique
