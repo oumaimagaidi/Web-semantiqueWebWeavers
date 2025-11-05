@@ -251,6 +251,11 @@
     <modele>Citaro</modele>
     <kilometrage>12500.0</kilometrage>
   </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#003">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#TicketBus"/>
+    <statutTicket>actif</statutTicket>
+    <prix rdf:datatype="http://www.w3.org/2001/XMLSchema#float">2.5</prix>
+  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#nombreVehiculesImpliques">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
@@ -632,6 +637,16 @@
     <immatriculation>2569874</immatriculation>
     <modele>peogeo</modele>
   </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#23">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Voyageur"/>
+    <email>naima@esprit.tn</email>
+    <prenom>Naima</prenom>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#56"/>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#01"/>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#TicketEtudiant"/>
+    <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">24</age>
+    <nom>Elmi</nom>
+  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#Conducteur">
     <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
@@ -661,6 +676,13 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#proposePar">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#36">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Voyageur"/>
+    <email>mariem@esprit.tn</email>
+    <prenom>ouali</prenom>
+    <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">26</age>
+    <nom>mariem</nom>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#AppartementWala">
     <capaciteAccueil>80</capaciteAccueil>
@@ -966,6 +988,8 @@
     <email>emna.ouerghemmi@esprit.tn</email>
     <prenom>emna</prenom>
     <niveauAbonnement>Standard</niveauAbonnement>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#ticke01"/>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#TicketEtudiant"/>
     <scoreFidelite rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">0</scoreFidelite>
     <genre>Féminin</genre>
     <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">24</age>

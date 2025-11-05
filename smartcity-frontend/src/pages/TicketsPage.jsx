@@ -2,15 +2,25 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 export default function TicketsPage() {
-  const [voyageurId, setVoyageurId] = useState("");
-  const [ticketId, setTicketId] = useState("");
+  const [selectedVoyageur, setSelectedVoyageur] = useState("");
+  const [selectedTicket, setSelectedTicket] = useState("");
   const [ticketsVoyageur, setTicketsVoyageur] = useState([]);
   const [allTickets, setAllTickets] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showTicketForm, setShowTicketForm] = useState(false);
+  const [showAssignForm, setShowAssignForm] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [particles, setParticles] = useState([]);
+
+  // États pour les nouveaux formulaires
+  const [newTicket, setNewTicket] = useState({
+    id: "",
+    type_ticket: "TicketBus",
+    prix: 2.50,
+    statutTicket: "actif"
+  });
 
   // Système de particules futuriste
   useEffect(() => {
@@ -33,55 +43,14 @@ export default function TicketsPage() {
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-  // ------------------- Ajouter un ticket -------------------
-  const addTicket = async (e) => {
-    e.preventDefault();
-    if (!voyageurId || !ticketId) return;
-
+  // ------------------- Récupérer tous les utilisateurs -------------------
+  const fetchAllUsers = async () => {
     try {
-      setLoading(true);
-      // Utiliser l'endpoint existant pour créer un ticket
-      const ticketRes = await axios.post("http://localhost:8000/add_ticket/", {
-        id: ticketId,
-        type_ticket: "TicketBus", // Type par défaut
-        prix: 0.0,
-        statutTicket: "actif"
-      });
-
-      // Associer le ticket au voyageur
-      const linkRes = await axios.post("http://localhost:8000/personne/possede_ticket/", {
-        personne_id: voyageurId,
-        ticket_id: ticketId
-      });
-
-      setTicketId("");
-      setVoyageurId("");
-      setShowForm(false);
-      fetchTicketsByVoyageur(voyageurId);
-      fetchAllTickets();
+      const res = await axios.get("http://localhost:8000/personnes/");
+      setAllUsers(res.data);
     } catch (err) {
-      console.error("Erreur lors de l'ajout du ticket:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ------------------- Récupérer tickets d'un voyageur -------------------
-  const fetchTicketsByVoyageur = async (vid) => {
-    if (!vid) return;
-    try {
-      setLoading(true);
-      // Utiliser l'endpoint de recherche générique
-      const res = await axios.get(`http://localhost:8000/search/?query=${vid}`);
-      const tickets = res.data.results.filter(item => 
-        item.type.includes("Ticket") && item.label.includes(vid)
-      );
-      setTicketsVoyageur(tickets);
-    } catch (err) {
-      console.error("Erreur lors de la recherche des tickets:", err);
-      setTicketsVoyageur([]);
-    } finally {
-      setLoading(false);
+      console.error("Erreur lors du chargement des utilisateurs:", err);
+      setAllUsers([]);
     }
   };
 
@@ -99,20 +68,156 @@ export default function TicketsPage() {
     }
   };
 
+  // ------------------- Récupérer tickets d'un voyageur -------------------
+  const fetchTicketsByVoyageur = async (userId) => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+      const res = await axios.get(`http://localhost:8000/tickets/utilisateur/${userId}`);
+      setTicketsVoyageur(res.data.tickets || []);
+    } catch (err) {
+      console.error("Erreur lors de la recherche des tickets:", err);
+      setTicketsVoyageur([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchAllTickets();
+    fetchAllUsers();
   }, []);
 
-  const handleVoyageurIdChange = (value) => {
-    setVoyageurId(value);
-  };
+  // ------------------- Créer un nouveau ticket -------------------
+ // Dans la fonction createTicket, assurez-vous d'utiliser le bon endpoint :
+const createTicket = async (e) => {
+  e.preventDefault();
+  
+  // Validation
+  if (!newTicket.id.trim()) {
+    alert("L'identifiant du ticket est obligatoire");
+    return;
+  }
 
-  const handleTicketIdChange = (value) => {
-    setTicketId(value);
-  };
+  if (!newTicket.prix || parseFloat(newTicket.prix) <= 0) {
+    alert("Le prix doit être un nombre positif");
+    return;
+  }
 
-  const handleSearchTickets = () => {
-    fetchTicketsByVoyageur(voyageurId);
+  try {
+    setLoading(true);
+    
+    // S'assurer que le type de ticket est exact
+    const ticketType = newTicket.type_ticket; // Déjà correct depuis le select
+    
+    // Préparer les données exactement comme attendu par le backend
+    const ticketData = {
+      id: newTicket.id.trim(),
+      type_ticket: ticketType, // Utiliser directement la valeur du select
+      prix: parseFloat(newTicket.prix),
+      statutTicket: newTicket.statutTicket || "actif",
+      utilisateur_id: newTicket.utilisateur_id?.trim() || null
+    };
+
+    console.log("🎫 Données envoyées:", ticketData);
+    console.log("🔍 Type de ticket envoyé:", ticketType);
+
+    const response = await axios.post(
+      "http://localhost:8000/create_ticket/", 
+      ticketData,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000
+      }
+    );
+
+    console.log("✅ Réponse du serveur:", response.data);
+
+    if (response.data.message) {
+      alert(`✅ ${response.data.message}`);
+      setNewTicket({
+        id: "",
+        type_ticket: "TicketBus",
+        prix: 2.50,
+        statutTicket: "actif",
+        utilisateur_id: ""
+      });
+      setShowTicketForm(false);
+      
+      // Rafraîchir la liste
+      setTimeout(() => {
+        fetchAllTickets();
+      }, 1500);
+    } else {
+      alert("❌ Réponse inattendue du serveur");
+    }
+    
+  } catch (err) {
+    console.error("❌ Erreur détaillée:", err);
+    
+    if (err.response) {
+      console.error("📊 Données d'erreur:", err.response.data);
+      
+      if (err.response.status === 422) {
+        const errors = err.response.data.detail;
+        let errorMessage = "Erreurs de validation :\n";
+        errors.forEach(error => {
+          const field = error.loc[error.loc.length - 1];
+          errorMessage += `• ${field}: ${error.msg}\n`;
+        });
+        alert(errorMessage);
+      } else if (err.response.data.error) {
+        // Afficher l'erreur spécifique du backend
+        alert(`❌ ${err.response.data.error}`);
+      } else {
+        alert(`❌ Erreur ${err.response.status}: ${err.response.statusText}`);
+      }
+    } else if (err.request) {
+      alert("❌ Aucune réponse du serveur. Vérifiez la connexion.");
+    } else {
+      alert(`❌ Erreur: ${err.message}`);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+// Et pour les tickets non attribués :
+const unassignedTickets = allTickets.filter(ticket => 
+  !ticket.utilisateur || 
+  ticket.utilisateur === null ||
+  (typeof ticket.utilisateur === 'object' && Object.keys(ticket.utilisateur).length === 0) ||
+  (typeof ticket.utilisateur === 'string' && ticket.utilisateur === '')
+);
+
+  // ------------------- Attribuer un ticket à un utilisateur -------------------
+  const assignTicket = async (e) => {
+    e.preventDefault();
+    if (!selectedVoyageur || !selectedTicket) {
+      alert("Veuillez sélectionner un utilisateur et un ticket");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await axios.post("http://localhost:8000/personne/possede_ticket/", {
+        personne_id: selectedVoyageur,
+        ticket_id: selectedTicket
+      });
+
+      alert(`✅ Ticket "${selectedTicket}" attribué à l'utilisateur "${selectedVoyageur}" !`);
+      setSelectedVoyageur("");
+      setSelectedTicket("");
+      setShowAssignForm(false);
+      fetchAllTickets();
+      fetchTicketsByVoyageur(selectedVoyageur);
+    } catch (err) {
+      console.error("Erreur lors de l'attribution du ticket:", err);
+      alert("Erreur lors de l'attribution du ticket");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getTicketTypeIcon = (type) => {
@@ -135,6 +240,30 @@ export default function TicketsPage() {
     return colors[type] || colors.default;
   };
 
+  // Fonction pour obtenir le nom d'utilisateur formaté
+  const getUtilisateurDisplay = (utilisateur) => {
+    if (!utilisateur) return null;
+    
+    if (typeof utilisateur === 'string') {
+      return utilisateur.toUpperCase();
+    }
+    
+    if (utilisateur.display_name) {
+      return utilisateur.display_name.toUpperCase();
+    }
+    
+    if (utilisateur.id) {
+      return utilisateur.id.toUpperCase();
+    }
+    
+    if (utilisateur.nom && utilisateur.prenom) {
+      return `${utilisateur.prenom} ${utilisateur.nom}`.toUpperCase();
+    }
+    
+    return 'UTILISATEUR INCONNU';
+  };
+
+  // Tickets non attribués
   return (
     <div style={styles.container}>
       {/* Réseau neuronal cybernétique */}
@@ -180,7 +309,7 @@ export default function TicketsPage() {
                 SYSTÈME DE GESTION DES TICKETS
               </h1>
               <p style={styles.subtitle}>
-                SURVEILLANCE ET ATTRIBUTION DES TICKETS EN TEMPS RÉEL
+                CRÉATION ET ATTRIBUTION DES TICKETS - GESTION SÉPARÉE
               </p>
             </div>
             <div style={styles.stats}>
@@ -191,57 +320,55 @@ export default function TicketsPage() {
               </div>
               <div style={styles.statItem}>
                 <div style={styles.statGlow}></div>
-                <span style={styles.statNumber}>
-                  {allTickets.filter(t => t.statutTicket === 'actif').length}
-                </span>
-                <span style={styles.statLabel}>TICKETS ACTIFS</span>
+                <span style={styles.statNumber}>{unassignedTickets.length}</span>
+                <span style={styles.statLabel}>TICKETS LIBRES</span>
+              </div>
+              <div style={styles.statItem}>
+                <div style={styles.statGlow}></div>
+                <span style={styles.statNumber}>{allUsers.length}</span>
+                <span style={styles.statLabel}>UTILISATEURS</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bouton pour afficher le formulaire */}
-        <div style={styles.addButtonContainer}>
+        {/* Boutons d'action principaux */}
+        <div style={styles.actionButtons}>
           <button 
-            onClick={() => setShowForm(!showForm)}
-            style={styles.addButton}
+            onClick={() => setShowTicketForm(!showTicketForm)}
+            style={styles.primaryButton}
           >
             <span style={styles.buttonIcon}>
-              {showForm ? '✖️' : '➕'}
+              {showTicketForm ? '✖️' : '🎫'}
             </span>
             <span>
-              {showForm ? 'MASQUER LE FORMULAIRE' : 'AJOUTER UN TICKET'}
+              {showTicketForm ? 'MASQUER LA CRÉATION' : 'CRÉER UN TICKET'}
+            </span>
+          </button>
+
+          <button 
+            onClick={() => setShowAssignForm(!showAssignForm)}
+            style={styles.secondaryButton}
+          >
+            <span style={styles.buttonIcon}>
+              {showAssignForm ? '✖️' : '👤'}
+            </span>
+            <span>
+              {showAssignForm ? 'MASQUER L\'ATTRIBUTION' : 'ATTRIBUER UN TICKET'}
             </span>
           </button>
         </div>
 
-        {/* Formulaire d'ajout (conditionnel) */}
-        {showForm && (
+        {/* Formulaire de création de ticket */}
+        {showTicketForm && (
           <div style={styles.formCard}>
             <div style={styles.cardGlow}></div>
             <div style={styles.formHeader}>
-              <h3 style={styles.formTitle}>➕ CRÉER ET ATTRIBUER UN TICKET</h3>
+              <h3 style={styles.formTitle}>🎫 CRÉER UN NOUVEAU TICKET</h3>
               <div style={styles.formIndicator}></div>
             </div>
-            <form onSubmit={addTicket}>
+            <form onSubmit={createTicket}>
               <div style={styles.formGrid}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>
-                    IDENTIFIANT DU VOYAGEUR
-                    <span style={styles.required}>*</span>
-                  </label>
-                  <div style={styles.inputContainer}>
-                    <input
-                      type="text"
-                      placeholder="ex: voyageur_001"
-                      value={voyageurId}
-                      onChange={(e) => handleVoyageurIdChange(e.target.value)}
-                      style={styles.input}
-                      required
-                    />
-                    <div style={styles.inputGlow}></div>
-                  </div>
-                </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>
                     IDENTIFIANT DU TICKET
@@ -251,10 +378,41 @@ export default function TicketsPage() {
                     <input
                       type="text"
                       placeholder="ex: ticket_001"
-                      value={ticketId}
-                      onChange={(e) => handleTicketIdChange(e.target.value)}
+                      value={newTicket.id}
+                      onChange={(e) => setNewTicket({...newTicket, id: e.target.value})}
                       style={styles.input}
                       required
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>TYPE DE TICKET</label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={newTicket.type_ticket}
+                      onChange={(e) => setNewTicket({...newTicket, type_ticket: e.target.value})}
+                      style={styles.input}
+                    >
+                      <option value="TicketBus">Ticket Bus</option>
+                      <option value="TicketMetro">Ticket Metro</option>
+                      <option value="TicketParking">Ticket Parking</option>
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>PRIX (€)</label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="2.50"
+                      value={newTicket.prix}
+                      onChange={(e) => setNewTicket({...newTicket, prix: parseFloat(e.target.value)})}
+                      style={styles.input}
                     />
                     <div style={styles.inputGlow}></div>
                   </div>
@@ -273,12 +431,12 @@ export default function TicketsPage() {
                   {loading ? (
                     <div style={styles.buttonContent}>
                       <div style={styles.quantumSpinner}></div>
-                      <span>CRYPTAGE EN COURS...</span>
+                      <span>CRÉATION EN COURS...</span>
                     </div>
                   ) : (
                     <div style={styles.buttonContent}>
-                      <span style={styles.buttonIcon}>🎫</span>
-                      <span>CRÉER ET ATTRIBUER LE TICKET</span>
+                      <span style={styles.buttonIcon}>✅</span>
+                      <span>CRÉER LE TICKET</span>
                     </div>
                   )}
                 </button>
@@ -286,75 +444,128 @@ export default function TicketsPage() {
                 <button 
                   type="button"
                   onClick={() => {
-                    setTicketId("");
-                    setVoyageurId("");
+                    setNewTicket({
+                      id: "",
+                      type_ticket: "TicketBus",
+                      prix: 2.50,
+                      statutTicket: "actif"
+                    });
                   }}
                   style={styles.secondaryButton}
                 >
                   <span style={styles.buttonIcon}>🔄</span>
                   <span>RÉINITIALISER</span>
                 </button>
-
-                <button 
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  style={styles.cancelButton}
-                >
-                  <span style={styles.buttonIcon}>❌</span>
-                  <span>ANNULER</span>
-                </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Recherche de tickets par voyageur */}
-        <div style={styles.filterCard}>
-          <div style={styles.cardGlow}></div>
-          <div style={styles.formHeader}>
-            <h3 style={styles.formTitle}>🔍 RECHERCHER LES TICKETS D'UN VOYAGEUR</h3>
-            <div style={styles.formIndicator}></div>
-          </div>
-          <div style={styles.filterForm}>
-            <div style={styles.filterInputGroup}>
-              <div style={styles.inputContainer}>
-                <input
-                  type="text"
-                  placeholder="ENTREZ L'IDENTIFIANT DU VOYAGEUR"
-                  value={voyageurId}
-                  onChange={(e) => handleVoyageurIdChange(e.target.value)}
-                  style={styles.filterInput}
-                />
-                <div style={styles.inputGlow}></div>
-              </div>
-              <button
-                onClick={handleSearchTickets}
-                style={styles.filterButton}
-                disabled={loading}
-              >
-                {loading ? (
-                  <div style={styles.buttonContent}>
-                    <div style={styles.smallSpinner}></div>
-                    <span>RECHERCHE...</span>
-                  </div>
-                ) : (
-                  <div style={styles.buttonContent}>
-                    <span style={styles.buttonIcon}>🔍</span>
-                    <span>RECHERCHER</span>
-                  </div>
-                )}
-              </button>
+        {/* Formulaire d'attribution de ticket */}
+        {showAssignForm && (
+          <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
+            <div style={styles.formHeader}>
+              <h3 style={styles.formTitle}>👤 ATTRIBUER UN TICKET À UN UTILISATEUR</h3>
+              <div style={styles.formIndicator}></div>
             </div>
-            
-            {ticketsVoyageur.length > 0 ? (
-              <div style={styles.ticketsList}>
-                <h4 style={styles.listTitle}>TICKETS DU VOYAGEUR {voyageurId.toUpperCase()}</h4>
+            <form onSubmit={assignTicket}>
+              <div style={styles.formGrid}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    SÉLECTIONNER L'UTILISATEUR
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={selectedVoyageur}
+                      onChange={(e) => {
+                        setSelectedVoyageur(e.target.value);
+                        fetchTicketsByVoyageur(e.target.value);
+                      }}
+                      style={styles.input}
+                      required
+                    >
+                      <option value="">Choisir un utilisateur...</option>
+                      {allUsers.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.prenom} {user.nom} ({user.id})
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    SÉLECTIONNER LE TICKET
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={selectedTicket}
+                      onChange={(e) => setSelectedTicket(e.target.value)}
+                      style={styles.input}
+                      required
+                    >
+                      <option value="">Choisir un ticket...</option>
+                      {unassignedTickets.map(ticket => (
+                        <option key={ticket.id} value={ticket.id}>
+                          {ticket.id} - {ticket.type_ticket} - {ticket.prix}€
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.formActions}>
+                <button 
+                  type="submit" 
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
+                  disabled={loading || !selectedVoyageur || !selectedTicket}
+                >
+                  {loading ? (
+                    <div style={styles.buttonContent}>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>ATTRIBUTION EN COURS...</span>
+                    </div>
+                  ) : (
+                    <div style={styles.buttonContent}>
+                      <span style={styles.buttonIcon}>✅</span>
+                      <span>ATTRIBUER LE TICKET</span>
+                    </div>
+                  )}
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setSelectedVoyageur("");
+                    setSelectedTicket("");
+                  }}
+                  style={styles.secondaryButton}
+                >
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Affichage des tickets de l'utilisateur sélectionné */}
+            {selectedVoyageur && ticketsVoyageur.length > 0 && (
+              <div style={styles.userTickets}>
+                <h4 style={styles.listTitle}>
+                  TICKETS DE {allUsers.find(u => u.id === selectedVoyageur)?.prenom?.toUpperCase() || selectedVoyageur.toUpperCase()}
+                </h4>
                 <div style={styles.ticketsGrid}>
                   {ticketsVoyageur.map((ticket, index) => (
-                    <div 
-                      key={index} 
-                      style={styles.ticketItem}
-                    >
+                    <div key={index} style={styles.ticketItem}>
                       <div 
                         style={{
                           ...styles.ticketIcon,
@@ -367,23 +578,15 @@ export default function TicketsPage() {
                       <div style={styles.ticketInfo}>
                         <div style={styles.ticketId}>{ticket.id}</div>
                         <div style={styles.ticketType}>{ticket.type.replace('Ticket', '').toUpperCase()}</div>
+                        <div style={styles.ticketPrice}>{ticket.prix} €</div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : (
-              <div style={styles.emptyState}>
-                <div style={styles.emptyText}>
-                  {voyageurId ? `AUCUN TICKET TROUVÉ POUR "${voyageurId.toUpperCase()}"` : 'ENTREZ UN IDENTIFIANT VOYAGEUR'}
-                </div>
-                <div style={styles.emptySubtext}>
-                  {voyageurId ? 'LE VOYAGEUR PEUT NE PAS EXISTER OU NE PAS AVOIR DE TICKETS' : 'RECHERCHEZ LES TICKETS PAR IDENTIFIANT VOYAGEUR'}
-                </div>
-              </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Tous les tickets */}
         <div style={styles.section}>
@@ -431,10 +634,7 @@ export default function TicketsPage() {
                     </thead>
                     <tbody>
                       {currentTickets.map((ticket, idx) => (
-                        <tr 
-                          key={idx} 
-                          style={styles.tableRow}
-                        >
+                        <tr key={idx} style={styles.tableRow}>
                           <td style={styles.tableCell}>
                             <span style={styles.ticketBadge}>
                               {ticket.id}
@@ -448,7 +648,8 @@ export default function TicketsPage() {
                                 boxShadow: `0 0 15px ${getTicketTypeColor(ticket.type_ticket || ticket.type)}`
                               }}
                             >
-                              {getTicketTypeIcon(ticket.type_ticket || ticket.type)} {(ticket.type_ticket || ticket.type).replace('Ticket', '').toUpperCase()}
+                              {getTicketTypeIcon(ticket.type_ticket || ticket.type)} 
+                              {(ticket.type_ticket || ticket.type).replace('Ticket', '').toUpperCase()}
                             </span>
                           </td>
                           <td style={styles.tableCell}>
@@ -470,7 +671,7 @@ export default function TicketsPage() {
                           <td style={styles.tableCell}>
                             {ticket.utilisateur ? (
                               <span style={styles.voyageurBadge}>
-                                👤 {ticket.utilisateur.toUpperCase()}
+                                👤 {getUtilisateurDisplay(ticket.utilisateur)}
                               </span>
                             ) : (
                               <span style={styles.noVoyageur}>NON ATTRIBUÉ</span>
@@ -487,7 +688,7 @@ export default function TicketsPage() {
                     <div style={styles.emptyIcon}>🎫</div>
                     <div style={styles.emptyText}>AUCUN TICKET ENREGISTRÉ</div>
                     <div style={styles.emptySubtext}>
-                      CRÉEZ ET ATTRIBUEZ DES TICKETS AUX VOYAGEURS POUR COMMENCER
+                      CRÉEZ DES TICKETS POUR COMMENCER
                     </div>
                   </div>
                 )}
@@ -671,12 +872,14 @@ const styles = {
     fontWeight: '600',
     letterSpacing: '1px'
   },
-  addButtonContainer: {
+  actionButtons: {
     display: 'flex',
     justifyContent: 'center',
-    marginBottom: '2rem'
+    gap: '2rem',
+    marginBottom: '2rem',
+    flexWrap: 'wrap'
   },
-  addButton: {
+  primaryButton: {
     background: 'linear-gradient(135deg, #ffaa00, #00ffff)',
     color: '#0a0a0a',
     fontWeight: '700',
@@ -687,24 +890,30 @@ const styles = {
     fontSize: '1rem',
     transition: 'all 0.3s ease',
     boxShadow: '0 0 25px rgba(255, 170, 0, 0.4)',
-    minWidth: '300px',
+    minWidth: '250px',
+    letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  secondaryButton: {
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
+    padding: '1rem 2rem',
+    borderRadius: '0.75rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 25px rgba(0, 255, 255, 0.4)',
+    minWidth: '250px',
     letterSpacing: '1px',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem'
   },
   formCard: {
-    backgroundColor: 'rgba(10, 15, 35, 0.7)',
-    borderRadius: '1.5rem',
-    border: '1px solid rgba(0, 255, 255, 0.3)',
-    padding: '2rem',
-    marginBottom: '3rem',
-    backdropFilter: 'blur(15px)',
-    boxShadow: '0 0 25px rgba(0, 255, 255, 0.1)',
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  filterCard: {
     backgroundColor: 'rgba(10, 15, 35, 0.7)',
     borderRadius: '1.5rem',
     border: '1px solid rgba(0, 255, 255, 0.3)',
@@ -797,47 +1006,9 @@ const styles = {
     alignItems: 'center',
     flexWrap: 'wrap'
   },
-  primaryButton: {
-    background: 'linear-gradient(135deg, #ffaa00, #00ffff)',
-    color: '#0a0a0a',
-    fontWeight: '700',
-    padding: '1rem 2rem',
-    borderRadius: '0.75rem',
-    border: 'none',
-    cursor: 'pointer',
-    fontSize: '0.9rem',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 0 25px rgba(255, 170, 0, 0.4)',
-    minWidth: '200px',
-    letterSpacing: '1px'
-  },
   buttonDisabled: {
     opacity: 0.6,
     cursor: 'not-allowed'
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    color: '#88ffff',
-    fontWeight: '600',
-    padding: '1rem 1.5rem',
-    borderRadius: '0.75rem',
-    border: '1px solid rgba(0, 255, 255, 0.3)',
-    cursor: 'pointer',
-    fontSize: '0.875rem',
-    transition: 'all 0.3s ease',
-    letterSpacing: '0.5px'
-  },
-  cancelButton: {
-    backgroundColor: 'transparent',
-    color: '#ff4444',
-    fontWeight: '600',
-    padding: '1rem 1.5rem',
-    borderRadius: '0.75rem',
-    border: '1px solid rgba(255, 68, 68, 0.3)',
-    cursor: 'pointer',
-    fontSize: '0.875rem',
-    transition: 'all 0.3s ease',
-    letterSpacing: '0.5px'
   },
   buttonContent: {
     display: 'flex',
@@ -864,73 +1035,10 @@ const styles = {
     borderRadius: '50%',
     animation: 'quantumSpin 1s linear infinite'
   },
-  filterForm: {
-    width: '100%'
-  },
-  filterInputGroup: {
-    display: 'flex',
-    gap: '1rem',
-    alignItems: 'center'
-  },
-  filterInput: {
-    flex: '1',
-    padding: '1rem 1.25rem',
-    border: '1px solid rgba(0, 255, 255, 0.3)',
-    borderRadius: '0.75rem',
-    fontSize: '1rem',
-    transition: 'all 0.3s ease',
-    outline: 'none',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    color: '#ffffff',
-    fontFamily: "'Rajdhani', sans-serif"
-  },
-  filterButton: {
-    backgroundColor: 'rgba(0, 255, 255, 0.2)',
-    color: '#00ffff',
-    fontWeight: '600',
-    padding: '1rem 1.5rem',
-    borderRadius: '0.75rem',
-    border: '1px solid rgba(0, 255, 255, 0.3)',
-    cursor: 'pointer',
-    fontSize: '0.875rem',
-    transition: 'all 0.3s ease',
-    whiteSpace: 'nowrap',
-    letterSpacing: '0.5px'
-  },
-  section: {
-    marginBottom: '2rem'
-  },
-  sectionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '1.5rem'
-  },
-  sectionActions: {
-    display: 'flex',
-    gap: '1rem',
-    alignItems: 'center'
-  },
-  sectionTitle: {
-    fontSize: '1.3rem',
-    fontWeight: '600',
-    color: '#00ffff',
-    letterSpacing: '1px'
-  },
-  refreshButton: {
-    backgroundColor: 'rgba(0, 255, 255, 0.1)',
-    color: '#88ffff',
-    fontWeight: '600',
-    padding: '0.75rem 1.25rem',
-    borderRadius: '0.75rem',
-    border: '1px solid rgba(0, 255, 255, 0.3)',
-    cursor: 'pointer',
-    fontSize: '0.8rem',
-    transition: 'all 0.3s ease',
-    letterSpacing: '0.5px'
-  },
-  ticketsList: {
-    marginTop: '1.5rem'
+  userTickets: {
+    marginTop: '2rem',
+    paddingTop: '2rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.2)'
   },
   listTitle: {
     fontSize: '1.1rem',
@@ -981,6 +1089,43 @@ const styles = {
     color: '#88ffff',
     fontSize: '0.8rem',
     fontWeight: '600',
+    letterSpacing: '0.5px'
+  },
+  ticketPrice: {
+    color: '#00ff88',
+    fontSize: '0.9rem',
+    fontWeight: '600'
+  },
+  section: {
+    marginBottom: '2rem'
+  },
+  sectionHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.5rem'
+  },
+  sectionActions: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center'
+  },
+  sectionTitle: {
+    fontSize: '1.3rem',
+    fontWeight: '600',
+    color: '#00ffff',
+    letterSpacing: '1px'
+  },
+  refreshButton: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
     letterSpacing: '0.5px'
   },
   tableCard: {
@@ -1230,36 +1375,12 @@ const globalStyles = `
     transform: none;
   }
 
-  .secondary-button:hover {
-    background-color: rgba(0, 255, 255, 0.1);
-    border-color: rgba(0, 255, 255, 0.5);
-    transform: translateY(-1px);
-  }
-
-  .cancel-button:hover {
-    background-color: rgba(255, 68, 68, 0.1);
-    border-color: rgba(255, 68, 68, 0.5);
-    transform: translateY(-1px);
-  }
-
-  .filter-button:hover:not(:disabled) {
-    background-color: rgba(0, 255, 255, 0.3);
-    border-color: rgba(0, 255, 255, 0.6);
-    transform: translateY(-1px);
+  .secondary-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 35px rgba(0, 255, 255, 0.6);
   }
 
   .refresh-button:hover:not(:disabled) {
-    background-color: rgba(0, 255, 255, 0.2);
-    border-color: rgba(0, 255, 255, 0.5);
-    transform: translateY(-1px);
-  }
-
-  .add-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 35px rgba(255, 170, 0, 0.6);
-  }
-
-  .pagination-button:hover:not(:disabled) {
     background-color: rgba(0, 255, 255, 0.2);
     border-color: rgba(0, 255, 255, 0.5);
     transform: translateY(-1px);
@@ -1286,6 +1407,10 @@ const globalStyles = `
       align-self: flex-start;
     }
     
+    .action-buttons {
+      flex-direction: column;
+    }
+    
     .form-grid {
       grid-template-columns: 1fr;
     }
@@ -1294,17 +1419,9 @@ const globalStyles = `
       flex-direction: column;
     }
     
-    .primary-button, .secondary-button, .cancel-button {
+    .primary-button, .secondary-button {
       width: 100%;
       justify-content: center;
-    }
-    
-    .filter-input-group {
-      flex-direction: column;
-    }
-    
-    .filter-input, .filter-button {
-      width: 100%;
     }
     
     .tickets-grid {
@@ -1332,7 +1449,7 @@ const globalStyles = `
       width: 100%;
     }
     
-    .form-card, .filter-card, .table-card {
+    .form-card, .table-card {
       border-radius: 1rem;
       padding: 1.5rem;
     }
