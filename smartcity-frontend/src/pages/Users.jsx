@@ -16,6 +16,9 @@ export default function Users() {
 
   const [message, setMessage] = useState(null);
   const [particles, setParticles] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1); // Nouvel état pour la page actuelle
+  const [usersPerPage] = useState(5); // Nombre d'utilisateurs par page
 
   // Système de particules futuriste
   useEffect(() => {
@@ -70,6 +73,7 @@ export default function Users() {
         type_personne: "Personne"
       });
       setMessage("✅ PROFIL UTILISATEUR CRÉÉ AVEC SUCCÈS");
+      setShowForm(false);
       loadUsers();
     } catch (error) {
       console.error("Erreur lors de l'ajout d'un utilisateur :", error);
@@ -87,6 +91,29 @@ export default function Users() {
   const handleSubmit = (e) => {
     e.preventDefault();
     addUser(e);
+  };
+
+  // Logique de pagination
+  const indexOfLastUser = currentPage * usersPerPage;
+  const indexOfFirstUser = indexOfLastUser - usersPerPage;
+  const currentUsers = users.slice(indexOfFirstUser, indexOfLastUser);
+  const totalPages = Math.ceil(users.length / usersPerPage);
+
+  // Changer de page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  // Aller à la page précédente
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Aller à la page suivante
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   const userTypes = [
@@ -198,119 +225,151 @@ export default function Users() {
           </div>
         )}
 
-        {/* Formulaire d'ajout */}
-        <div style={styles.formCard}>
-          <div style={styles.cardGlow}></div>
-          <div style={styles.formHeader}>
-            <h3 style={styles.formTitle}>➕ INITIER UN NOUVEAU PROFIL</h3>
-            <div style={styles.formIndicator}></div>
+        {/* Bouton pour afficher le formulaire */}
+        {!showForm && (
+          <div style={styles.addButtonContainer}>
+            <button 
+              onClick={() => setShowForm(true)}
+              style={styles.addUserButton}
+            >
+              <div style={styles.buttonContent}>
+                <span style={styles.buttonIcon}>👤</span>
+                <span>AJOUTER UTILISATEUR</span>
+              </div>
+              <div style={styles.buttonGlow}></div>
+            </button>
           </div>
-          <form onSubmit={handleSubmit}>
-            <div style={styles.formGrid}>
-              {fields.map(({ key, label, type, placeholder }) => (
-                <div key={key} style={styles.inputGroup}>
+        )}
+
+        {/* Formulaire d'ajout (conditionnel) */}
+        {showForm && (
+          <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
+            <div style={styles.formHeader}>
+              <h3 style={styles.formTitle}>➕ INITIER UN NOUVEAU PROFIL</h3>
+              <div style={styles.formActionsTop}>
+                <button 
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  style={styles.closeButton}
+                >
+                  <span style={styles.buttonIcon}>✕</span>
+                  <span>FERMER</span>
+                </button>
+              </div>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div style={styles.formGrid}>
+                {fields.map(({ key, label, type, placeholder }) => (
+                  <div key={key} style={styles.inputGroup}>
+                    <label style={styles.label}>
+                      {label}
+                      <span style={styles.required}>*</span>
+                    </label>
+                    <div style={styles.inputContainer}>
+                      <input
+                        type={type}
+                        placeholder={placeholder}
+                        value={form[key]}
+                        onChange={(e) => handleInputChange(key, e.target.value)}
+                        style={styles.input}
+                        required
+                      />
+                      <div style={styles.inputGlow}></div>
+                    </div>
+                  </div>
+                ))}
+                
+                <div style={styles.inputGroup}>
                   <label style={styles.label}>
-                    {label}
+                    TYPE DE PROFIL
                     <span style={styles.required}>*</span>
                   </label>
                   <div style={styles.inputContainer}>
-                    <input
-                      type={type}
-                      placeholder={placeholder}
-                      value={form[key]}
-                      onChange={(e) => handleInputChange(key, e.target.value)}
-                      style={styles.input}
-                      required
-                    />
+                    <select
+                      value={form.type_personne}
+                      onChange={(e) => handleInputChange("type_personne", e.target.value)}
+                      style={styles.select}
+                    >
+                      {userTypes.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
                     <div style={styles.inputGlow}></div>
                   </div>
                 </div>
-              ))}
-              
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  TYPE DE PROFIL
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.type_personne}
-                    onChange={(e) => handleInputChange("type_personne", e.target.value)}
-                    style={styles.select}
-                  >
-                    {userTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
               </div>
-            </div>
-            
-            <div style={styles.formActions}>
-              <button 
-                type="submit"
-                style={{
-                  ...styles.primaryButton,
-                  ...(loading && styles.buttonDisabled)
-                }}
-                disabled={loading}
-              >
-                {loading ? (
-                  <div style={styles.buttonContent}>
-                    <div style={styles.quantumSpinner}></div>
-                    <span>CRYPTAGE EN COURS...</span>
-                  </div>
-                ) : (
-                  <div style={styles.buttonContent}>
-                    <span style={styles.buttonIcon}>⚡</span>
-                    <span>ACTIVER LE PROFIL</span>
-                  </div>
-                )}
-              </button>
               
-              <button 
-                type="button"
-                onClick={() => setForm({ 
-                  id: "", 
-                  nom: "", 
-                  prenom: "",
-                  age: "", 
-                  email: "",
-                  type_personne: "Personne"
-                })}
-                style={styles.secondaryButton}
-              >
-                <span style={styles.buttonIcon}>🔄</span>
-                <span>RÉINITIALISER</span>
-              </button>
-            </div>
-          </form>
-        </div>
+              <div style={styles.formActions}>
+                <button 
+                  type="submit"
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div style={styles.buttonContent}>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>CRYPTAGE EN COURS...</span>
+                    </div>
+                  ) : (
+                    <div style={styles.buttonContent}>
+                      <span style={styles.buttonIcon}>⚡</span>
+                      <span>ACTIVER LE PROFIL</span>
+                    </div>
+                  )}
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => setForm({ 
+                    id: "", 
+                    nom: "", 
+                    prenom: "",
+                    age: "", 
+                    email: "",
+                    type_personne: "Personne"
+                  })}
+                  style={styles.secondaryButton}
+                >
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Tableau des utilisateurs */}
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>📋 RÉPERTOIRE DES PROFILS</h3>
-            <button 
-              onClick={loadUsers}
-              style={styles.refreshButton}
-              disabled={loading}
-            >
-              {loading ? (
-                <div style={styles.buttonContent}>
-                  <div style={styles.smallSpinner}></div>
-                  <span>SYNCHRONISATION...</span>
-                </div>
-              ) : (
-                <div style={styles.buttonContent}>
-                  <span style={styles.buttonIcon}>🔄</span>
-                  <span>ACTUALISER</span>
-                </div>
-              )}
-            </button>
+            <div style={styles.sectionActions}>
+              <div style={styles.paginationInfo}>
+                AFFICHAGE {Math.min(indexOfFirstUser + 1, users.length)}-{Math.min(indexOfLastUser, users.length)} SUR {users.length}
+              </div>
+              <button 
+                onClick={loadUsers}
+                style={styles.refreshButton}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div style={styles.buttonContent}>
+                    <div style={styles.smallSpinner}></div>
+                    <span>SYNCHRONISATION...</span>
+                  </div>
+                ) : (
+                  <div style={styles.buttonContent}>
+                    <span style={styles.buttonIcon}>🔄</span>
+                    <span>ACTUALISER</span>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
 
           <div style={styles.tableCard}>
@@ -334,7 +393,7 @@ export default function Users() {
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map((user) => (
+                      {currentUsers.map((user) => (
                         <tr 
                           key={user.id} 
                           style={styles.tableRow}
@@ -377,6 +436,52 @@ export default function Users() {
                     <div style={styles.emptyText}>AUCUN PROFIL UTILISATEUR DÉTECTÉ</div>
                     <div style={styles.emptySubtext}>
                       INITIEZ LA CRÉATION D'UN NOUVEAU PROFIL POUR COMMENCER
+                    </div>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {users.length > 0 && (
+                  <div style={styles.paginationContainer}>
+                    <div style={styles.pagination}>
+                      <button 
+                        onClick={goToPreviousPage}
+                        disabled={currentPage === 1}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === 1 && styles.paginationButtonDisabled)
+                        }}
+                      >
+                        <span style={styles.buttonIcon}>◀</span>
+                        <span>PRÉCÉDENT</span>
+                      </button>
+
+                      <div style={styles.paginationNumbers}>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
+                          <button
+                            key={number}
+                            onClick={() => paginate(number)}
+                            style={{
+                              ...styles.paginationNumber,
+                              ...(currentPage === number && styles.paginationNumberActive)
+                            }}
+                          >
+                            {number}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button 
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === totalPages && styles.paginationButtonDisabled)
+                        }}
+                      >
+                        <span>SUIVANT</span>
+                        <span style={styles.buttonIcon}>▶</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -575,6 +680,38 @@ const styles = {
     background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
     animation: 'dataFlow 3s linear infinite'
   },
+  // Nouveaux styles pour le bouton d'ajout
+  addButtonContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '2rem'
+  },
+  addUserButton: {
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
+    padding: '1.5rem 3rem',
+    borderRadius: '1rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1.1rem',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 30px rgba(0, 255, 255, 0.4)',
+    minWidth: '280px',
+    letterSpacing: '1px',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  buttonGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, transparent 70%)',
+    animation: 'pulse 2s ease-in-out infinite',
+    pointerEvents: 'none'
+  },
   formCard: {
     backgroundColor: 'rgba(10, 15, 35, 0.7)',
     borderRadius: '1.5rem',
@@ -608,11 +745,21 @@ const styles = {
     color: '#00ffff',
     letterSpacing: '1px'
   },
-  formIndicator: {
-    width: '4rem',
-    height: '0.25rem',
-    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
-    borderRadius: '2rem'
+  formActionsTop: {
+    display: 'flex',
+    gap: '1rem'
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    color: '#ff6b6b',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(255, 0, 0, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
   },
   formGrid: {
     display: 'grid',
@@ -751,6 +898,21 @@ const styles = {
     color: '#00ffff',
     letterSpacing: '1px'
   },
+  sectionActions: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center'
+  },
+  paginationInfo: {
+    fontSize: '0.8rem',
+    color: '#88ffff',
+    fontWeight: '600',
+    letterSpacing: '0.5px',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    padding: '0.5rem 1rem',
+    borderRadius: '0.5rem',
+    border: '1px solid rgba(0, 255, 255, 0.2)'
+  },
   refreshButton: {
     backgroundColor: 'rgba(0, 255, 255, 0.1)',
     color: '#88ffff',
@@ -878,6 +1040,62 @@ const styles = {
     fontSize: '0.9rem',
     maxWidth: '300px',
     fontWeight: '300'
+  },
+  // Styles pour la pagination
+  paginationContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '2rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.1)'
+  },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    flexWrap: 'wrap',
+    justifyContent: 'center'
+  },
+  paginationButton: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  paginationButtonDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed'
+  },
+  paginationNumbers: {
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center'
+  },
+  paginationNumber: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1rem',
+    borderRadius: '0.5rem',
+    border: '1px solid rgba(0, 255, 255, 0.2)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    minWidth: '3rem'
+  },
+  paginationNumberActive: {
+    backgroundColor: 'rgba(0, 255, 255, 0.3)',
+    color: '#ffffff',
+    border: '1px solid rgba(0, 255, 255, 0.5)',
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.3)'
   }
 };
 
@@ -976,6 +1194,29 @@ const globalStyles = `
     transform: translateX(4px);
   }
 
+  .add-user-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 40px rgba(0, 255, 255, 0.6);
+  }
+
+  .close-button:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+    border-color: rgba(255, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .pagination-button:hover:not(:disabled) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .pagination-number:hover:not(.pagination-number-active) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.4);
+    transform: translateY(-1px);
+  }
+
   @media (max-width: 1024px) {
     .header-content {
       flex-direction: column;
@@ -1027,6 +1268,36 @@ const globalStyles = `
       flex-direction: row;
       justify-content: space-between;
       width: 100%;
+    }
+    
+    .form-header {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    
+    .form-actions-top {
+      align-self: flex-end;
+    }
+    
+    .section-header {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    
+    .section-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .pagination-numbers {
+      order: -1;
     }
   }
 `;

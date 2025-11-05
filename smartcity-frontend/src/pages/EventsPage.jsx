@@ -5,6 +5,9 @@ export default function EventsPage() {
   const [events, setEvents] = useState([]);
   const [infras, setInfras] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
   const [form, setForm] = useState({ 
     id: "", 
     type_evenement: "TrajetUrgent", 
@@ -87,7 +90,7 @@ export default function EventsPage() {
         });
       }
       
-      // Réinitialiser le formulaire
+      // Réinitialiser le formulaire et le masquer
       setForm({ 
         id: "", 
         type_evenement: "TrajetUrgent", 
@@ -95,6 +98,7 @@ export default function EventsPage() {
         description: "",
         niveau_urgence: "medium"
       });
+      setShowForm(false);
       
       // Recharger les événements
       fetchEvents();
@@ -111,6 +115,14 @@ export default function EventsPage() {
       [field]: value
     }));
   };
+
+  // Calculs pour la pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentEvents = events.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(events.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const eventTypes = [
     { value: "TrajetUrgent", label: "🚨 URGENCE CRITIQUE", color: "#ff00ff" },
@@ -222,177 +234,207 @@ export default function EventsPage() {
           </div>
         </div>
 
-        {/* Formulaire d'alerte */}
-        <div style={styles.formCard}>
-          <div style={styles.cardGlow}></div>
-          <div style={styles.formHeader}>
-            <h3 style={styles.formTitle}>➕ INITIER UN NOUVEL ÉVÉNEMENT</h3>
-            <div style={styles.formIndicator}></div>
-          </div>
-          <form onSubmit={addEvent}>
-            <div style={styles.formGrid}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  IDENTIFIANT D'ÉVÉNEMENT
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <input
-                    type="text"
-                    placeholder="EVENT_001"
-                    value={form.id}
-                    onChange={(e) => handleInputChange("id", e.target.value)}
-                    style={styles.input}
-                    required
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  TYPE D'ÉVÉNEMENT
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.type_evenement}
-                    onChange={(e) => handleInputChange("type_evenement", e.target.value)}
-                    style={styles.select}
-                    required
-                  >
-                    {eventTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  NIVEAU D'URGENCE
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.niveau_urgence}
-                    onChange={(e) => handleInputChange("niveau_urgence", e.target.value)}
-                    style={{
-                      ...styles.select,
-                      borderColor: getUrgencyColor(form.niveau_urgence)
-                    }}
-                  >
-                    {urgencyLevels.map((level) => (
-                      <option key={level.value} value={level.value}>
-                        {level.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  INFRASTRUCTURE CONCERNÉE
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.infrastructure_id}
-                    onChange={(e) => handleInputChange("infrastructure_id", e.target.value)}
-                    style={styles.select}
-                  >
-                    <option value="">SÉLECTIONNEZ UNE INFRASTRUCTURE</option>
-                    {infras.map((infra) => (
-                      <option key={infra.id} value={infra.id}>
-                        {infra.nom || infra.id} ({infra.type})
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
-                <label style={styles.label}>
-                  RAPPORT DE SITUATION
-                </label>
-                <div style={styles.inputContainer}>
-                  <textarea
-                    placeholder="DÉCRIVEZ LA NATURE ET L'IMPACT DE L'ÉVÉNEMENT..."
-                    value={form.description}
-                    onChange={(e) => handleInputChange("description", e.target.value)}
-                    style={styles.textarea}
-                    rows={3}
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.formActions}>
-              <button 
-                type="submit"
-                style={{
-                  ...styles.primaryButton,
-                  ...(loading && styles.buttonDisabled)
-                }}
-                disabled={loading}
-              >
-                {loading ? (
-                  <div style={styles.buttonContent}>
-                    <div style={styles.quantumSpinner}></div>
-                    <span>CRYPTAGE EN COURS...</span>
-                  </div>
-                ) : (
-                  <div style={styles.buttonContent}>
-                    <span style={styles.buttonIcon}>⚡</span>
-                    <span>ACTIVER L'ALERTE</span>
-                  </div>
-                )}
-              </button>
-              
-              <button 
-                type="button"
-                onClick={() => setForm({ 
-                  id: "", 
-                  type_evenement: "TrajetUrgent", 
-                  infrastructure_id: "",
-                  description: "",
-                  niveau_urgence: "medium"
-                })}
-                style={styles.secondaryButton}
-              >
-                <span style={styles.buttonIcon}>🔄</span>
-                <span>RÉINITIALISER</span>
-              </button>
-            </div>
-          </form>
+        {/* Bouton pour afficher le formulaire */}
+        <div style={styles.addButtonContainer}>
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            style={styles.addButton}
+          >
+            <span style={styles.buttonIcon}>
+              {showForm ? '✖️' : '➕'}
+            </span>
+            <span>
+              {showForm ? 'MASQUER LE FORMULAIRE' : 'AJOUTER UN ÉVÉNEMENT'}
+            </span>
+          </button>
         </div>
+
+        {/* Formulaire d'alerte (conditionnel) */}
+        {showForm && (
+          <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
+            <div style={styles.formHeader}>
+              <h3 style={styles.formTitle}>➕ INITIER UN NOUVEL ÉVÉNEMENT</h3>
+              <div style={styles.formIndicator}></div>
+            </div>
+            <form onSubmit={addEvent}>
+              <div style={styles.formGrid}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    IDENTIFIANT D'ÉVÉNEMENT
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="text"
+                      placeholder="EVENT_001"
+                      value={form.id}
+                      onChange={(e) => handleInputChange("id", e.target.value)}
+                      style={styles.input}
+                      required
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    TYPE D'ÉVÉNEMENT
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.type_evenement}
+                      onChange={(e) => handleInputChange("type_evenement", e.target.value)}
+                      style={styles.select}
+                      required
+                    >
+                      {eventTypes.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    NIVEAU D'URGENCE
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.niveau_urgence}
+                      onChange={(e) => handleInputChange("niveau_urgence", e.target.value)}
+                      style={{
+                        ...styles.select,
+                        borderColor: getUrgencyColor(form.niveau_urgence)
+                      }}
+                    >
+                      {urgencyLevels.map((level) => (
+                        <option key={level.value} value={level.value}>
+                          {level.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    INFRASTRUCTURE CONCERNÉE
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.infrastructure_id}
+                      onChange={(e) => handleInputChange("infrastructure_id", e.target.value)}
+                      style={styles.select}
+                    >
+                      <option value="">SÉLECTIONNEZ UNE INFRASTRUCTURE</option>
+                      {infras.map((infra) => (
+                        <option key={infra.id} value={infra.id}>
+                          {infra.nom || infra.id} ({infra.type})
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
+                  <label style={styles.label}>
+                    RAPPORT DE SITUATION
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <textarea
+                      placeholder="DÉCRIVEZ LA NATURE ET L'IMPACT DE L'ÉVÉNEMENT..."
+                      value={form.description}
+                      onChange={(e) => handleInputChange("description", e.target.value)}
+                      style={styles.textarea}
+                      rows={3}
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.formActions}>
+                <button 
+                  type="submit"
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div style={styles.buttonContent}>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>CRYPTAGE EN COURS...</span>
+                    </div>
+                  ) : (
+                    <div style={styles.buttonContent}>
+                      <span style={styles.buttonIcon}>⚡</span>
+                      <span>ACTIVER L'ALERTE</span>
+                    </div>
+                  )}
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setForm({ 
+                      id: "", 
+                      type_evenement: "TrajetUrgent", 
+                      infrastructure_id: "",
+                      description: "",
+                      niveau_urgence: "medium"
+                    });
+                  }}
+                  style={styles.secondaryButton}
+                >
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  style={styles.cancelButton}
+                >
+                  <span style={styles.buttonIcon}>❌</span>
+                  <span>ANNULER</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Tableau des événements */}
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>📋 JOURNAL DES ÉVÉNEMENTS ET TRAJETS</h3>
-            <button 
-              onClick={fetchEvents}
-              style={styles.refreshButton}
-              disabled={loading}
-            >
-              {loading ? (
-                <div style={styles.buttonContent}>
-                  <div style={styles.smallSpinner}></div>
-                  <span>SYNCHRONISATION...</span>
-                </div>
-              ) : (
-                <div style={styles.buttonContent}>
-                  <span style={styles.buttonIcon}>🔄</span>
-                  <span>ACTUALISER</span>
-                </div>
-              )}
-            </button>
+            <div style={styles.sectionControls}>
+              <button 
+                onClick={fetchEvents}
+                style={styles.refreshButton}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div style={styles.buttonContent}>
+                    <div style={styles.smallSpinner}></div>
+                    <span>SYNCHRONISATION...</span>
+                  </div>
+                ) : (
+                  <div style={styles.buttonContent}>
+                    <span style={styles.buttonIcon}>🔄</span>
+                    <span>ACTUALISER</span>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
 
           <div style={styles.tableCard}>
@@ -416,7 +458,7 @@ export default function EventsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {events.map((event) => (
+                      {currentEvents.map((event) => (
                         <tr 
                           key={event.id} 
                           style={styles.tableRow}
@@ -475,6 +517,37 @@ export default function EventsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Pagination */}
+                {events.length > 0 && (
+                  <div style={styles.pagination}>
+                    <button 
+                      onClick={() => paginate(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      style={{
+                        ...styles.paginationButton,
+                        ...(currentPage === 1 && styles.paginationButtonDisabled)
+                      }}
+                    >
+                      ‹ PRÉCÉDENT
+                    </button>
+                    
+                    <div style={styles.paginationInfo}>
+                      Page {currentPage} sur {totalPages}
+                    </div>
+
+                    <button 
+                      onClick={() => paginate(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        ...styles.paginationButton,
+                        ...(currentPage === totalPages && styles.paginationButtonDisabled)
+                      }}
+                    >
+                      SUIVANT ›
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -520,7 +593,6 @@ export default function EventsPage() {
     </div>
   );
 }
-
 
 const styles = {
   container: {
@@ -661,6 +733,28 @@ const styles = {
     textAlign: 'center',
     fontWeight: '600',
     letterSpacing: '1px'
+  },
+  addButtonContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '2rem'
+  },
+  addButton: {
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
+    padding: '1rem 2rem',
+    borderRadius: '0.75rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 25px rgba(0, 255, 136, 0.4)',
+    minWidth: '300px',
+    letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
   },
   formCard: {
     backgroundColor: 'rgba(10, 15, 35, 0.7)',
@@ -812,6 +906,18 @@ const styles = {
     transition: 'all 0.3s ease',
     letterSpacing: '0.5px'
   },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    color: '#ff4444',
+    fontWeight: '600',
+    padding: '1rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(255, 68, 68, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
+  },
   buttonContent: {
     display: 'flex',
     alignItems: 'center',
@@ -851,6 +957,11 @@ const styles = {
     fontWeight: '600',
     color: '#00ffff',
     letterSpacing: '1px'
+  },
+  sectionControls: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center'
   },
   refreshButton: {
     backgroundColor: 'rgba(0, 255, 255, 0.1)',
@@ -992,6 +1103,36 @@ const styles = {
     fontSize: '0.9rem',
     maxWidth: '300px',
     fontWeight: '300'
+  },
+  pagination: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '1.5rem',
+    gap: '1rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.1)'
+  },
+  paginationButton: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
+  },
+  paginationButtonDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed'
+  },
+  paginationInfo: {
+    color: '#88ffff',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    padding: '0 1rem'
   },
   alertPanel: {
     backgroundColor: 'rgba(10, 15, 35, 0.7)',
@@ -1148,7 +1289,24 @@ const globalStyles = `
     transform: translateY(-1px);
   }
 
+  .cancel-button:hover {
+    background-color: rgba(255, 68, 68, 0.1);
+    border-color: rgba(255, 68, 68, 0.5);
+    transform: translateY(-1px);
+  }
+
   .refresh-button:hover:not(:disabled) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .add-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 35px rgba(0, 255, 136, 0.6);
+  }
+
+  .pagination-button:hover:not(:disabled) {
     background-color: rgba(0, 255, 255, 0.2);
     border-color: rgba(0, 255, 255, 0.5);
     transform: translateY(-1px);
@@ -1177,7 +1335,7 @@ const globalStyles = `
       flex-direction: column;
     }
     
-    .primary-button, .secondary-button {
+    .primary-button, .secondary-button, .cancel-button {
       width: 100%;
       justify-content: center;
     }
@@ -1220,6 +1378,11 @@ const globalStyles = `
       flex-direction: column;
       gap: 1rem;
       text-align: center;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.5rem;
     }
   }
 `;

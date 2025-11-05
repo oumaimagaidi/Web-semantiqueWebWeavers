@@ -12,6 +12,9 @@ export default function InfrastructuresPage() {
   });
   const [message, setMessage] = useState(null);
   const [particles, setParticles] = useState([]);
+  const [showForm, setShowForm] = useState(false); // Nouvel état pour contrôler l'affichage du formulaire
+  const [currentPage, setCurrentPage] = useState(1); // État pour la page actuelle
+  const [itemsPerPage] = useState(5); // Nombre d'éléments par page
 
   // Système de particules futuriste
   useEffect(() => {
@@ -46,13 +49,27 @@ export default function InfrastructuresPage() {
   };
 
   // --- Ajouter une infrastructure ---
-// --- Ajouter une infrastructure ---
+  // --- Ajouter une infrastructure ---
 const addInfra = async (e) => {
   e.preventDefault();
   setMessage(null);
   setLoading(true);
 
   try {
+    // Validation des champs requis
+    if (!form.id.trim() || !form.nom.trim() || !form.type.trim()) {
+      setMessage("❌ VEUILLEZ REMPLIR TOUS LES CHAMPS OBLIGATOIRES");
+      setLoading(false);
+      return;
+    }
+
+    console.log("🔄 Envoi des données:", {
+      id: form.id.trim(),
+      nom: form.nom.trim(),
+      type_infrastructure: form.type.trim(),
+      adresse: form.adresse.trim()
+    });
+
     const res = await axios.post("http://localhost:8000/add_infrastructure/", {
       id: form.id.trim(),
       nom: form.nom.trim(),
@@ -60,16 +77,38 @@ const addInfra = async (e) => {
       adresse: form.adresse.trim()
     });
 
-    setMessage(res.data.message || "✅ INFRASTRUCTURE CRÉÉE AVEC SUCCÈS");
-    setForm({ id: "", nom: "", type: "Route", adresse: "" });
-    fetchInfras();
+    console.log("✅ Réponse du serveur:", res.data);
+
+    if (res.data.error) {
+      setMessage(`❌ ERREUR: ${res.data.error}`);
+    } else {
+      setMessage(res.data.message || "✅ INFRASTRUCTURE CRÉÉE AVEC SUCCÈS");
+      setForm({ id: "", nom: "", type: "Route", adresse: "" });
+      setShowForm(false);
+      
+      // Recharger les données après un court délai
+      setTimeout(() => {
+        fetchInfras();
+      }, 1000);
+    }
   } catch (err) {
-    console.error("Erreur d'ajout :", err);
-    setMessage(
-      err.response?.data?.detail ||
-      err.response?.data?.error ||  // Ajout pour capturer les erreurs du backend
-      "❌ ÉCHEC DE CRÉATION DE L'INFRASTRUCTURE"
-    );
+    console.error("❌ Erreur détaillée d'ajout :", err);
+    
+    let errorMessage = "❌ ÉCHEC DE CRÉATION DE L'INFRASTRUCTURE";
+    
+    if (err.response) {
+      // Erreur du serveur
+      console.error("📊 Données de réponse d'erreur:", err.response.data);
+      errorMessage = err.response.data?.detail || 
+                    err.response.data?.error || 
+                    err.response.data?.message || 
+                    `Erreur ${err.response.status}: ${err.response.statusText}`;
+    } else if (err.request) {
+      // Pas de réponse du serveur
+      errorMessage = "❌ IMPOSSIBLE DE SE CONNECTER AU SERVEUR";
+    }
+    
+    setMessage(errorMessage);
   } finally {
     setLoading(false);
   }
@@ -80,6 +119,29 @@ const addInfra = async (e) => {
       ...prev,
       [field]: value
     }));
+  };
+
+  // Logique de pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = infras.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(infras.length / itemsPerPage);
+
+  // Changer de page
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  // Aller à la page précédente
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Aller à la page suivante
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   const infrastructureTypes = [
@@ -188,145 +250,177 @@ const addInfra = async (e) => {
           </div>
         )}
 
-        {/* Formulaire de création */}
-        <div style={styles.formCard}>
-          <div style={styles.cardGlow}></div>
-          <div style={styles.formHeader}>
-            <h3 style={styles.formTitle}>➕ INITIER UNE NOUVELLE INFRASTRUCTURE</h3>
-            <div style={styles.formIndicator}></div>
+        {/* Bouton pour afficher le formulaire */}
+        {!showForm && (
+          <div style={styles.addButtonContainer}>
+            <button 
+              onClick={() => setShowForm(true)}
+              style={styles.addItemButton}
+            >
+              <div style={styles.buttonContent}>
+                <span style={styles.buttonIcon}>🏗️</span>
+                <span>AJOUTER UNE INFRASTRUCTURE</span>
+              </div>
+              <div style={styles.buttonGlow}></div>
+            </button>
           </div>
-          <form onSubmit={addInfra}>
-            <div style={styles.formGrid}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  IDENTIFIANT UNIQUE
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <input
-                    type="text"
-                    placeholder="INFRA_001"
-                    value={form.id}
-                    onChange={(e) => handleInputChange("id", e.target.value)}
-                    style={styles.input}
-                    required
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
+        )}
 
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  DÉSIGNATION
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <input
-                    type="text"
-                    placeholder="AUTOROUTE PRINCIPALE NEXUS"
-                    value={form.nom}
-                    onChange={(e) => handleInputChange("nom", e.target.value)}
-                    style={styles.input}
-                    required
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  CATÉGORIE
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.type}
-                    onChange={(e) => handleInputChange("type", e.target.value)}
-                    style={styles.select}
-                    required
-                  >
-                    {infrastructureTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  COORDONNÉES GÉOGRAPHIQUES
-                </label>
-                <div style={styles.inputContainer}>
-                  <input
-                    type="text"
-                    placeholder="SECTEUR URBAIN PRINCIPAL"
-                    value={form.adresse}
-                    onChange={(e) => handleInputChange("adresse", e.target.value)}
-                    style={styles.input}
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
+        {/* Formulaire de création (conditionnel) */}
+        {showForm && (
+          <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
+            <div style={styles.formHeader}>
+              <h3 style={styles.formTitle}>➕ INITIER UNE NOUVELLE INFRASTRUCTURE</h3>
+              <div style={styles.formActionsTop}>
+                <button 
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  style={styles.closeButton}
+                >
+                  <span style={styles.buttonIcon}>✕</span>
+                  <span>FERMER</span>
+                </button>
               </div>
             </div>
-
-            <div style={styles.formActions}>
-              <button
-                type="submit"
-                style={{
-                  ...styles.primaryButton,
-                  ...(loading && styles.buttonDisabled)
-                }}
-                disabled={loading}
-              >
-                {loading ? (
-                  <div style={styles.buttonContent}>
-                    <div style={styles.quantumSpinner}></div>
-                    <span>CRYPTAGE EN COURS...</span>
+            <form onSubmit={addInfra}>
+              <div style={styles.formGrid}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    IDENTIFIANT UNIQUE
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="text"
+                      placeholder="INFRA_001"
+                      value={form.id}
+                      onChange={(e) => handleInputChange("id", e.target.value)}
+                      style={styles.input}
+                      required
+                    />
+                    <div style={styles.inputGlow}></div>
                   </div>
-                ) : (
-                  <div style={styles.buttonContent}>
-                    <span style={styles.buttonIcon}>⚡</span>
-                    <span>ACTIVER L'INFRASTRUCTURE</span>
-                  </div>
-                )}
-              </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => setForm({ id: "", nom: "", type: "Route", adresse: "" })}
-                style={styles.secondaryButton}
-              >
-                <span style={styles.buttonIcon}>🔄</span>
-                <span>RÉINITIALISER</span>
-              </button>
-            </div>
-          </form>
-        </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    DÉSIGNATION
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="text"
+                      placeholder="AUTOROUTE PRINCIPALE NEXUS"
+                      value={form.nom}
+                      onChange={(e) => handleInputChange("nom", e.target.value)}
+                      style={styles.input}
+                      required
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    CATÉGORIE
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.type}
+                      onChange={(e) => handleInputChange("type", e.target.value)}
+                      style={styles.select}
+                      required
+                    >
+                      {infrastructureTypes.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    COORDONNÉES GÉOGRAPHIQUES
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="text"
+                      placeholder="SECTEUR URBAIN PRINCIPAL"
+                      value={form.adresse}
+                      onChange={(e) => handleInputChange("adresse", e.target.value)}
+                      style={styles.input}
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.formActions}>
+                <button
+                  type="submit"
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div style={styles.buttonContent}>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>CRYPTAGE EN COURS...</span>
+                    </div>
+                  ) : (
+                    <div style={styles.buttonContent}>
+                      <span style={styles.buttonIcon}>⚡</span>
+                      <span>ACTIVER L'INFRASTRUCTURE</span>
+                    </div>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setForm({ id: "", nom: "", type: "Route", adresse: "" })}
+                  style={styles.secondaryButton}
+                >
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Tableau des infrastructures */}
         <div style={styles.section}>
           <div style={styles.sectionHeader}>
             <h3 style={styles.sectionTitle}>📋 INVENTAIRE DES INFRASTRUCTURES</h3>
-            <button
-              onClick={fetchInfras}
-              style={styles.refreshButton}
-              disabled={loading}
-            >
-              {loading ? (
-                <div style={styles.buttonContent}>
-                  <div style={styles.smallSpinner}></div>
-                  <span>SYNCHRONISATION...</span>
-                </div>
-              ) : (
-                <div style={styles.buttonContent}>
-                  <span style={styles.buttonIcon}>🔄</span>
-                  <span>ACTUALISER</span>
-                </div>
-              )}
-            </button>
+            <div style={styles.sectionActions}>
+              <div style={styles.paginationInfo}>
+                AFFICHAGE {Math.min(indexOfFirstItem + 1, infras.length)}-{Math.min(indexOfLastItem, infras.length)} SUR {infras.length}
+              </div>
+              <button
+                onClick={fetchInfras}
+                style={styles.refreshButton}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div style={styles.buttonContent}>
+                    <div style={styles.smallSpinner}></div>
+                    <span>SYNCHRONISATION...</span>
+                  </div>
+                ) : (
+                  <div style={styles.buttonContent}>
+                    <span style={styles.buttonIcon}>🔄</span>
+                    <span>ACTUALISER</span>
+                  </div>
+                )}
+              </button>
+            </div>
           </div>
 
           <div style={styles.tableCard}>
@@ -350,7 +444,7 @@ const addInfra = async (e) => {
                       </tr>
                     </thead>
                     <tbody>
-                      {infras.map((infra) => (
+                      {currentItems.map((infra) => (
                         <tr
                           key={infra.id}
                           style={styles.tableRow}
@@ -417,6 +511,52 @@ const addInfra = async (e) => {
                     <div style={styles.emptyText}>AUCUNE INFRASTRUCTURE DÉTECTÉE</div>
                     <div style={styles.emptySubtext}>
                       INITIEZ LA CRÉATION D'UNE NOUVELLE INFRASTRUCTURE
+                    </div>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {infras.length > 0 && (
+                  <div style={styles.paginationContainer}>
+                    <div style={styles.pagination}>
+                      <button 
+                        onClick={goToPreviousPage}
+                        disabled={currentPage === 1}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === 1 && styles.paginationButtonDisabled)
+                        }}
+                      >
+                        <span style={styles.buttonIcon}>◀</span>
+                        <span>PRÉCÉDENT</span>
+                      </button>
+
+                      <div style={styles.paginationNumbers}>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
+                          <button
+                            key={number}
+                            onClick={() => paginate(number)}
+                            style={{
+                              ...styles.paginationNumber,
+                              ...(currentPage === number && styles.paginationNumberActive)
+                            }}
+                          >
+                            {number}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button 
+                        onClick={goToNextPage}
+                        disabled={currentPage === totalPages}
+                        style={{
+                          ...styles.paginationButton,
+                          ...(currentPage === totalPages && styles.paginationButtonDisabled)
+                        }}
+                      >
+                        <span>SUIVANT</span>
+                        <span style={styles.buttonIcon}>▶</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -665,6 +805,38 @@ const styles = {
     background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)',
     animation: 'dataFlow 3s linear infinite'
   },
+  // Nouveaux styles pour le bouton d'ajout
+  addButtonContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '2rem'
+  },
+  addItemButton: {
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
+    padding: '1.5rem 3rem',
+    borderRadius: '1rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1.1rem',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 30px rgba(0, 255, 255, 0.4)',
+    minWidth: '300px',
+    letterSpacing: '1px',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  buttonGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, transparent 70%)',
+    animation: 'pulse 2s ease-in-out infinite',
+    pointerEvents: 'none'
+  },
   formCard: {
     backgroundColor: 'rgba(10, 15, 35, 0.7)',
     borderRadius: '1.5rem',
@@ -698,11 +870,21 @@ const styles = {
     color: '#00ffff',
     letterSpacing: '1px'
   },
-  formIndicator: {
-    width: '4rem',
-    height: '0.25rem',
-    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
-    borderRadius: '2rem'
+  formActionsTop: {
+    display: 'flex',
+    gap: '1rem'
+  },
+  closeButton: {
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    color: '#ff6b6b',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(255, 0, 0, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
   },
   formGrid: {
     display: 'grid',
@@ -840,6 +1022,21 @@ const styles = {
     fontWeight: '600',
     color: '#00ffff',
     letterSpacing: '1px'
+  },
+  sectionActions: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center'
+  },
+  paginationInfo: {
+    fontSize: '0.8rem',
+    color: '#88ffff',
+    fontWeight: '600',
+    letterSpacing: '0.5px',
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    padding: '0.5rem 1rem',
+    borderRadius: '0.5rem',
+    border: '1px solid rgba(0, 255, 255, 0.2)'
   },
   refreshButton: {
     backgroundColor: 'rgba(0, 255, 255, 0.1)',
@@ -1077,6 +1274,62 @@ const styles = {
     color: '#88ffff',
     fontWeight: '600',
     letterSpacing: '0.5px'
+  },
+  // Styles pour la pagination
+  paginationContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '2rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.1)'
+  },
+  pagination: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    flexWrap: 'wrap',
+    justifyContent: 'center'
+  },
+  paginationButton: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+  paginationButtonDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed'
+  },
+  paginationNumbers: {
+    display: 'flex',
+    gap: '0.5rem',
+    alignItems: 'center'
+  },
+  paginationNumber: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1rem',
+    borderRadius: '0.5rem',
+    border: '1px solid rgba(0, 255, 255, 0.2)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    minWidth: '3rem'
+  },
+  paginationNumberActive: {
+    backgroundColor: 'rgba(0, 255, 255, 0.3)',
+    color: '#ffffff',
+    border: '1px solid rgba(0, 255, 255, 0.5)',
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.3)'
   }
 };
 
@@ -1175,6 +1428,29 @@ const globalStyles = `
     transform: translateX(4px);
   }
 
+  .add-item-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 40px rgba(0, 255, 255, 0.6);
+  }
+
+  .close-button:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+    border-color: rgba(255, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .pagination-button:hover:not(:disabled) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .pagination-number:hover:not(.pagination-number-active) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.4);
+    transform: translateY(-1px);
+  }
+
   @media (max-width: 1024px) {
     .header-content {
       flex-direction: column;
@@ -1252,6 +1528,26 @@ const globalStyles = `
       flex-direction: column;
       gap: 1rem;
       text-align: center;
+    }
+    
+    .section-header {
+      flex-direction: column;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    
+    .section-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .pagination-numbers {
+      order: -1;
     }
   }
 `;

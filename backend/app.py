@@ -1249,9 +1249,174 @@ def get_stats():
     return {"stats": stats}
 
 # ======================
-# 🔍 ENDPOINT DE RECHERCHE GÉNÉRALE
+# ⚡ STATIONS RECHARGE - ENDPOINTS
 # ======================
 
+@app.get("/stations_recharge/")
+def get_all_stations_recharge():
+    """Récupère toutes les stations de recharge"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        
+        SELECT ?id ?type ?type_connecteur ?puissanceMax ?disponible WHERE {{
+            ?id a ?type .
+            ?type rdfs:subClassOf* mobilite:RechargeElectrique .
+            
+            OPTIONAL {{ ?id mobilite:typeConnecteur ?type_connecteur . }}
+            OPTIONAL {{ ?id mobilite:puissanceMax ?puissanceMax . }}
+            OPTIONAL {{ ?id mobilite:disponible ?disponible . }}
+        }}
+        ORDER BY ?id
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        stations = []
+        for r in results["results"]["bindings"]:
+            station_data = {
+                "id": r["id"]["value"].split("#")[-1],
+                "type": r["type"]["value"].split("#")[-1],
+                "type_connecteur": r.get("type_connecteur", {}).get("value"),
+                "puissanceMax": float(r["puissanceMax"]["value"]) if "puissanceMax" in r else 22.0,
+                "disponible": r.get("disponible", {}).get("value") == "true" if "disponible" in r else True
+            }
+            stations.append(station_data)
+        
+        print(f"📊 {len(stations)} stations de recharge récupérées de Fuseki")
+        return stations
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des stations: {e}")
+        # Fallback: retourner les données du graphe local
+        stations = []
+        for s, p, o in g.triples((None, RDF.type, None)):
+            if str(s).startswith(str(MOBILITE)):
+                if any(subclass in str(o) for subclass in ["RechargeElectrique", "RechargeGaz"]):
+                    station_data = {
+                        "id": str(s).split("#")[-1],
+                        "type": str(o).split("#")[-1],
+                        "type_connecteur": "Type2",
+                        "puissanceMax": 22.0,
+                        "disponible": True
+                    }
+                    # Récupérer les propriétés spécifiques
+                    for s2, p2, o2 in g.triples((s, None, None)):
+                        if str(p2) == str(MOBILITE.typeConnecteur):
+                            station_data["type_connecteur"] = str(o2)
+                        elif str(p2) == str(MOBILITE.puissanceMax):
+                            try:
+                                station_data["puissanceMax"] = float(o2)
+                            except (ValueError, TypeError):
+                                station_data["puissanceMax"] = 22.0
+                        elif str(p2) == str(MOBILITE.disponible):
+                            station_data["disponible"] = str(o2).lower() == "true"
+                    
+                    stations.append(station_data)
+        
+        print(f"📊 Fallback: {len(stations)} stations du graphe local")
+        return stations
+    
+# ======================
+# 🔗 RELATIONS VÉHICULE-STATION - ENDPOINTS
+# ======================
+
+class VehiculeStationLink(BaseModel):
+    vehicule_id: str
+    station_id: str
+
+@app.post("/vehicule/utilise_station/")
+def add_vehicule_station_link(link: VehiculeStationLink):
+    """Crée une relation entre un véhicule et une station de recharge"""
+    try:
+        print(f"🔄 Création de relation: {link.vehicule_id} → {link.station_id}")
+        
+        # 1. Ajouter au graphe local
+        vehicule_uri = MOBILITE[link.vehicule_id]
+        station_uri = MOBILITE[link.station_id]
+        g.add((vehicule_uri, MOBILITE.utiliseStationRecharge, station_uri))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 Relation sauvegardée localement: {link.vehicule_id} → {link.station_id}")
+
+        # 2. Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        INSERT DATA {{
+            mobilite:{link.vehicule_id} mobilite:utiliseStationRecharge mobilite:{link.station_id} .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            # Synchroniser le fichier local avec Fuseki
+            sync_from_fuseki_to_local()
+            return {
+                "message": f"✅ Relation créée avec succès: {link.vehicule_id} → {link.station_id}",
+                "vehicule_id": link.vehicule_id,
+                "station_id": link.station_id,
+                "relation_type": "utiliseStationRecharge"
+            }
+        else:
+            return {"error": f"❌ Échec de création de la relation dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de la relation: {str(e)}")
+        return {"error": f"Erreur lors de la création de la relation: {str(e)}"}
+
+@app.get("/relations_recharge/")
+def get_relations_recharge():
+    """Récupère toutes les relations véhicule -> station de recharge"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        SELECT ?vehicule ?station WHERE {{
+            ?vehicule mobilite:utiliseStationRecharge ?station .
+        }}
+        ORDER BY ?vehicule
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        relations = []
+        for r in results["results"]["bindings"]:
+            vehicule_id = r["vehicule"]["value"].split("#")[-1]
+            station_id = r["station"]["value"].split("#")[-1]
+            
+            relations.append({
+                "vehicule": vehicule_id,
+                "station": station_id,
+                "type": "utiliseStationRecharge"
+            })
+        
+        print(f"🔗 {len(relations)} relations de recharge trouvées")
+        return relations
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des relations: {e}")
+        # Fallback: chercher dans le graphe local
+        relations = []
+        for s, p, o in g.triples((None, MOBILITE.utiliseStationRecharge, None)):
+            if str(s).startswith(str(MOBILITE)) and str(o).startswith(str(MOBILITE)):
+                relations.append({
+                    "vehicule": str(s).split("#")[-1],
+                    "station": str(o).split("#")[-1],
+                    "type": "utiliseStationRecharge"
+                })
+        print(f"📊 Fallback: {len(relations)} relations du graphe local")
+        return relations
 @app.get("/search/")
 def search_instances(query: str = ""):
     sparql = SPARQLWrapper(FUSEKI_QUERY_URL)

@@ -5,6 +5,9 @@ export default function AvisPage() {
   const [avisList, setAvisList] = useState([]);
   const [personnes, setPersonnes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
   const [form, setForm] = useState({ 
     id: "", 
     commentaire: "", 
@@ -150,6 +153,7 @@ export default function AvisPage() {
         type_avis: "AvisPositif",
         utilisateur_id: "" 
       });
+      setShowForm(false);
       fetchAvis();
     } catch (err) {
       console.error("Erreur lors de l'ajout de l'avis:", err);
@@ -198,6 +202,14 @@ export default function AvisPage() {
     fetchAvis();
     setMessage("🔄 LISTE COMPLÈTE DES AVIS");
   };
+
+  // Calculs pour la pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentAvis = avisList.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(avisList.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   const getAvisTypeIcon = (type) => {
     const icons = {
@@ -268,7 +280,7 @@ export default function AvisPage() {
             </tr>
           </thead>
           <tbody>
-            {avisList.map((avis, index) => (
+            {currentAvis.map((avis, index) => (
               <tr key={avis.id || index} style={styles.tableRow}>
                 <td style={styles.tableCell}>
                   <span style={styles.avisId}>
@@ -380,6 +392,21 @@ export default function AvisPage() {
           </div>
         </div>
 
+        {/* Bouton pour afficher le formulaire */}
+        <div style={styles.addButtonContainer}>
+          <button 
+            onClick={() => setShowForm(!showForm)}
+            style={styles.addButton}
+          >
+            <span style={styles.buttonIcon}>
+              {showForm ? '✖️' : '➕'}
+            </span>
+            <span>
+              {showForm ? 'MASQUER LE FORMULAIRE' : 'AJOUTER UN AVIS'}
+            </span>
+          </button>
+        </div>
+
         {/* Message système */}
         {message && (
           <div 
@@ -404,155 +431,166 @@ export default function AvisPage() {
           </div>
         )}
 
-        {/* Formulaire d'ajout */}
-        <div style={styles.formCard}>
-          <div style={styles.cardGlow}></div>
-          <div style={styles.formHeader}>
-            <h3 style={styles.formTitle}>➕ INITIER UN NOUVEL AVIS</h3>
-            <div style={styles.formIndicator}></div>
+        {/* Formulaire d'ajout (conditionnel) */}
+        {showForm && (
+          <div style={styles.formCard}>
+            <div style={styles.cardGlow}></div>
+            <div style={styles.formHeader}>
+              <h3 style={styles.formTitle}>➕ INITIER UN NOUVEL AVIS</h3>
+              <div style={styles.formIndicator}></div>
+            </div>
+            <form onSubmit={addAvis}>
+              <div style={styles.formGrid}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    IDENTIFIANT AVIS
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <input
+                      type="text"
+                      placeholder="ex: AVIS_001"
+                      value={form.id}
+                      onChange={(e) => handleInputChange("id", e.target.value)}
+                      style={styles.input}
+                      required
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    UTILISATEUR
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.utilisateur_id}
+                      onChange={(e) => handleInputChange("utilisateur_id", e.target.value)}
+                      style={styles.select}
+                      required
+                    >
+                      <option value="">SÉLECTIONNEZ UN UTILISATEUR</option>
+                      {personnes.map((personne) => (
+                        <option key={personne.id} value={personne.id}>
+                          {personne.prenom} {personne.nom} ({personne.type})
+                        </option>
+                      ))}
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    TYPE D'AVIS
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.type_avis}
+                      onChange={(e) => handleInputChange("type_avis", e.target.value)}
+                      style={styles.select}
+                    >
+                      <option value="AvisPositif">👍 AVIS POSITIF</option>
+                      <option value="AvisNegatif">👎 AVIS NÉGATIF</option>
+                      <option value="Avis">💬 AVIS NEUTRE</option>
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>
+                    NOTE (1-5)
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <select
+                      value={form.note}
+                      onChange={(e) => handleInputChange("note", parseInt(e.target.value))}
+                      style={{
+                        ...styles.select,
+                        borderColor: getNoteColor(form.note)
+                      }}
+                    >
+                      <option value={1}>⭐ 1 - TRÈS MAUVAIS</option>
+                      <option value={2}>⭐⭐ 2 - MAUVAIS</option>
+                      <option value={3}>⭐⭐⭐ 3 - MOYEN</option>
+                      <option value={4}>⭐⭐⭐⭐ 4 - BON</option>
+                      <option value={5}>⭐⭐⭐⭐⭐ 5 - EXCELLENT</option>
+                    </select>
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+
+                <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
+                  <label style={styles.label}>
+                    COMMENTAIRE
+                    <span style={styles.required}>*</span>
+                  </label>
+                  <div style={styles.inputContainer}>
+                    <textarea
+                      placeholder="DÉCRIVEZ VOTRE EXPÉRIENCE..."
+                      value={form.commentaire}
+                      onChange={(e) => handleInputChange("commentaire", e.target.value)}
+                      style={styles.textarea}
+                      rows={3}
+                      required
+                    />
+                    <div style={styles.inputGlow}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.formActions}>
+                <button 
+                  type="submit"
+                  style={{
+                    ...styles.primaryButton,
+                    ...(loading && styles.buttonDisabled)
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <div style={styles.buttonContent}>
+                      <div style={styles.quantumSpinner}></div>
+                      <span>CRYPTAGE EN COURS...</span>
+                    </div>
+                  ) : (
+                    <div style={styles.buttonContent}>
+                      <span style={styles.buttonIcon}>⚡</span>
+                      <span>ACTIVER L'AVIS</span>
+                    </div>
+                  )}
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => setForm({ 
+                    id: "", 
+                    commentaire: "", 
+                    note: 5,
+                    type_avis: "AvisPositif",
+                    utilisateur_id: "" 
+                  })}
+                  style={styles.secondaryButton}
+                >
+                  <span style={styles.buttonIcon}>🔄</span>
+                  <span>RÉINITIALISER</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  style={styles.cancelButton}
+                >
+                  <span style={styles.buttonIcon}>❌</span>
+                  <span>ANNULER</span>
+                </button>
+              </div>
+            </form>
           </div>
-          <form onSubmit={addAvis}>
-            <div style={styles.formGrid}>
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  IDENTIFIANT AVIS
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <input
-                    type="text"
-                    placeholder="ex: AVIS_001"
-                    value={form.id}
-                    onChange={(e) => handleInputChange("id", e.target.value)}
-                    style={styles.input}
-                    required
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  UTILISATEUR
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.utilisateur_id}
-                    onChange={(e) => handleInputChange("utilisateur_id", e.target.value)}
-                    style={styles.select}
-                    required
-                  >
-                    <option value="">SÉLECTIONNEZ UN UTILISATEUR</option>
-                    {personnes.map((personne) => (
-                      <option key={personne.id} value={personne.id}>
-                        {personne.prenom} {personne.nom} ({personne.type})
-                      </option>
-                    ))}
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  TYPE D'AVIS
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.type_avis}
-                    onChange={(e) => handleInputChange("type_avis", e.target.value)}
-                    style={styles.select}
-                  >
-                    <option value="AvisPositif">👍 AVIS POSITIF</option>
-                    <option value="AvisNegatif">👎 AVIS NÉGATIF</option>
-                    <option value="Avis">💬 AVIS NEUTRE</option>
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={styles.inputGroup}>
-                <label style={styles.label}>
-                  NOTE (1-5)
-                </label>
-                <div style={styles.inputContainer}>
-                  <select
-                    value={form.note}
-                    onChange={(e) => handleInputChange("note", parseInt(e.target.value))}
-                    style={{
-                      ...styles.select,
-                      borderColor: getNoteColor(form.note)
-                    }}
-                  >
-                    <option value={1}>⭐ 1 - TRÈS MAUVAIS</option>
-                    <option value={2}>⭐⭐ 2 - MAUVAIS</option>
-                    <option value={3}>⭐⭐⭐ 3 - MOYEN</option>
-                    <option value={4}>⭐⭐⭐⭐ 4 - BON</option>
-                    <option value={5}>⭐⭐⭐⭐⭐ 5 - EXCELLENT</option>
-                  </select>
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-
-              <div style={{ ...styles.inputGroup, gridColumn: '1 / -1' }}>
-                <label style={styles.label}>
-                  COMMENTAIRE
-                  <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.inputContainer}>
-                  <textarea
-                    placeholder="DÉCRIVEZ VOTRE EXPÉRIENCE..."
-                    value={form.commentaire}
-                    onChange={(e) => handleInputChange("commentaire", e.target.value)}
-                    style={styles.textarea}
-                    rows={3}
-                    required
-                  />
-                  <div style={styles.inputGlow}></div>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.formActions}>
-              <button 
-                type="submit"
-                style={{
-                  ...styles.primaryButton,
-                  ...(loading && styles.buttonDisabled)
-                }}
-                disabled={loading}
-              >
-                {loading ? (
-                  <div style={styles.buttonContent}>
-                    <div style={styles.quantumSpinner}></div>
-                    <span>CRYPTAGE EN COURS...</span>
-                  </div>
-                ) : (
-                  <div style={styles.buttonContent}>
-                    <span style={styles.buttonIcon}>⚡</span>
-                    <span>ACTIVER L'AVIS</span>
-                  </div>
-                )}
-              </button>
-              
-              <button 
-                type="button"
-                onClick={() => setForm({ 
-                  id: "", 
-                  commentaire: "", 
-                  note: 5,
-                  type_avis: "AvisPositif",
-                  utilisateur_id: "" 
-                })}
-                style={styles.secondaryButton}
-              >
-                <span style={styles.buttonIcon}>🔄</span>
-                <span>RÉINITIALISER</span>
-              </button>
-            </div>
-          </form>
-        </div>
+        )}
 
         {/* Filtre par utilisateur */}
         <div style={styles.filterCard}>
@@ -638,6 +676,37 @@ export default function AvisPage() {
           <div style={styles.tableCard}>
             <div style={styles.cardGlow}></div>
             {renderAvisTable()}
+
+            {/* Pagination */}
+            {avisList.length > 0 && (
+              <div style={styles.pagination}>
+                <button 
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  style={{
+                    ...styles.paginationButton,
+                    ...(currentPage === 1 && styles.paginationButtonDisabled)
+                  }}
+                >
+                  ‹ PRÉCÉDENT
+                </button>
+                
+                <div style={styles.paginationInfo}>
+                  Page {currentPage} sur {totalPages}
+                </div>
+
+                <button 
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    ...styles.paginationButton,
+                    ...(currentPage === totalPages && styles.paginationButtonDisabled)
+                  }}
+                >
+                  SUIVANT ›
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -784,6 +853,28 @@ const styles = {
     textAlign: 'center',
     fontWeight: '600',
     letterSpacing: '1px'
+  },
+  addButtonContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '2rem'
+  },
+  addButton: {
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    fontWeight: '700',
+    padding: '1rem 2rem',
+    borderRadius: '0.75rem',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 0 25px rgba(0, 255, 136, 0.4)',
+    minWidth: '300px',
+    letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
   },
   message: {
     marginBottom: '2rem',
@@ -991,6 +1082,18 @@ const styles = {
     padding: '1rem 1.5rem',
     borderRadius: '0.75rem',
     border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.875rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    color: '#ff4444',
+    fontWeight: '600',
+    padding: '1rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(255, 68, 68, 0.3)',
     cursor: 'pointer',
     fontSize: '0.875rem',
     transition: 'all 0.3s ease',
@@ -1243,6 +1346,36 @@ const styles = {
     fontSize: '0.9rem',
     maxWidth: '300px',
     fontWeight: '300'
+  },
+  pagination: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '1.5rem',
+    gap: '1rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.1)'
+  },
+  paginationButton: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#88ffff',
+    fontWeight: '600',
+    padding: '0.75rem 1.5rem',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.3)',
+    cursor: 'pointer',
+    fontSize: '0.8rem',
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
+  },
+  paginationButtonDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed'
+  },
+  paginationInfo: {
+    color: '#88ffff',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    padding: '0 1rem'
   }
 };
 
@@ -1330,6 +1463,12 @@ const globalStyles = `
     transform: translateY(-1px);
   }
 
+  .cancel-button:hover {
+    background-color: rgba(255, 68, 68, 0.1);
+    border-color: rgba(255, 68, 68, 0.5);
+    transform: translateY(-1px);
+  }
+
   .filter-button:hover:not(:disabled) {
     background-color: rgba(0, 255, 255, 0.3);
     border-color: rgba(0, 255, 255, 0.6);
@@ -1351,6 +1490,17 @@ const globalStyles = `
   .debug-button:hover {
     background-color: rgba(255, 255, 0, 0.2);
     border-color: rgba(255, 255, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .add-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 35px rgba(0, 255, 136, 0.6);
+  }
+
+  .pagination-button:hover:not(:disabled) {
+    background-color: rgba(0, 255, 255, 0.2);
+    border-color: rgba(0, 255, 255, 0.5);
     transform: translateY(-1px);
   }
 
@@ -1377,7 +1527,7 @@ const globalStyles = `
       flex-direction: column;
     }
     
-    .primary-button, .secondary-button {
+    .primary-button, .secondary-button, .cancel-button {
       width: 100%;
       justify-content: center;
     }
@@ -1424,6 +1574,11 @@ const globalStyles = `
       flex-direction: column;
       gap: 1rem;
       align-items: flex-start;
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.5rem;
     }
   }
 `;
