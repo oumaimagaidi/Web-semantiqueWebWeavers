@@ -38,7 +38,7 @@ export default function StatistiquesPage() {
   const fetchStatistiques = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://127.0.0.1:8000/statistiques/");
+      const res = await axios.get("http://localhost:8000/statistiques/");
       setStatistiques(res.data);
     } catch (err) {
       console.error("Erreur fetch statistiques:", err);
@@ -51,7 +51,7 @@ export default function StatistiquesPage() {
   const fetchObservations = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://127.0.0.1:8000/observations/");
+      const res = await axios.get("http://localhost:8000/observations/");
       setObservations(res.data);
     } catch (err) {
       console.error("Erreur fetch observations:", err);
@@ -65,7 +65,7 @@ export default function StatistiquesPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post("http://127.0.0.1:8000/add_statistique_pollution/", pollutionForm);
+      await axios.post("http://localhost:8000/add_statistique_pollution/", pollutionForm);
       setPollutionForm({ id: "", tauxPollution: "" });
       setShowPollutionForm(false);
       fetchStatistiques();
@@ -81,7 +81,7 @@ export default function StatistiquesPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post("http://127.0.0.1:8000/add_statistique_accident/", accidentForm);
+      await axios.post("http://localhost:8000/add_statistique_accident/", accidentForm);
       setAccidentForm({ id: "", nbreDaccident: "" });
       setShowAccidentForm(false);
       fetchStatistiques();
@@ -97,7 +97,7 @@ export default function StatistiquesPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post("http://127.0.0.1:8000/add_observation/", observationForm);
+      await axios.post("http://localhost:8000/add_observation/", observationForm);
       setObservationForm({ utilisateur_id: "", statistique_id: "" });
       setShowObservationForm(false);
       fetchObservations();
