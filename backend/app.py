@@ -100,7 +100,37 @@ app.add_middleware(
 # ======================
 # ⚙️ FONCTIONS UTILITAIRES
 # ======================
-
+@app.get("/debug/fuseki/")
+def debug_fuseki():
+    """Endpoint de débogage pour Fuseki"""
+    try:
+        # Test de connexion de base
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        sparql.setQuery("SELECT (COUNT(*) as ?count) WHERE { ?s ?p ?o }")
+        result = sparql.query().convert()
+        total_triples = result['results']['bindings'][0]['count']['value']
+        
+        # Compter les tickets
+        sparql.setQuery(f"""
+        PREFIX mobilite: <{MOBILITE}>
+        SELECT (COUNT(*) as ?count) WHERE {{
+            ?ticket a ?type .
+            ?type rdfs:subClassOf* mobilite:Ticket .
+        }}
+        """)
+        ticket_result = sparql.query().convert()
+        ticket_count = ticket_result['results']['bindings'][0]['count']['value']
+        
+        return {
+            "status": "✅ Fuseki connecté",
+            "total_triples": total_triples,
+            "ticket_count": ticket_count,
+            "fuseki_url": FUSEKI_QUERY_URL,
+            "update_url": FUSEKI_UPDATE_URL
+        }
+    except Exception as e:
+        return {"status": "❌ Fuseki non accessible", "error": str(e)}
 def send_to_fuseki(update_query: str):
     """Envoie une requête SPARQL UPDATE à Fuseki avec vérification"""
     sparql = SPARQLWrapper(FUSEKI_UPDATE_URL)
@@ -220,7 +250,404 @@ def clean_sparql_query(query: str) -> str:
     query = re.sub(r'[ ]+', ' ', query)
 
     return query.strip()
+# ======================
+# 🎫 ENDPOINT POUR CRÉER UN TICKET
+# ======================
 
+# ======================
+# 🎫 ENDPOINT UNIFIÉ POUR CRÉER UN TICKET
+# ======================
+
+class TicketCreate(BaseModel):
+    id: str
+    type_ticket: str
+    prix: float
+    statutTicket: str = "actif"
+    utilisateur_id: str | None = None
+@app.post("/create_ticket/")
+def create_ticket(ticket_data: TicketCreate):
+    """
+    Crée un nouveau ticket et l'associe éventuellement à un utilisateur
+    """
+    try:
+        print(f"🎫 Tentative de création du ticket: {ticket_data.id}")
+        print(f"🔍 Type de ticket reçu: '{ticket_data.type_ticket}'")
+        
+        # VALIDATION CORRIGÉE DES TYPES DE TICKETS
+        valid_types = ["TicketBus", "TicketMetro", "TicketParking"]
+        type_clean = ticket_data.type_ticket
+        
+        # Vérification plus flexible
+        if type_clean not in valid_types:
+            print(f"❌ Type invalide: '{type_clean}'. Types valides: {valid_types}")
+            return {
+                "error": f"❌ Type '{ticket_data.type_ticket}' invalide. Doit être un de {valid_types}",
+                "received_type": type_clean,
+                "valid_types": valid_types
+            }
+        
+        print(f"✅ Type de ticket validé: {type_clean}")
+
+        # Vérifier si le ticket existe déjà
+        check_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{ticket_data.id} a ?type .
+            FILTER(STRSTARTS(STR(?type), STR(mobilite:)))
+        }}
+        """
+        
+        try:
+            sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+            sparql_check.setReturnFormat(JSON)
+            sparql_check.setQuery(check_query)
+            check_result = sparql_check.query().convert()
+            
+            if check_result["boolean"]:
+                return {"error": f"❌ Le ticket '{ticket_data.id}' existe déjà"}
+        except Exception as e:
+            print(f"⚠️ Erreur lors de la vérification de l'existence du ticket: {e}")
+
+        # Créer le ticket dans le graphe local
+        ticket_uri = MOBILITE[ticket_data.id]
+        g.add((ticket_uri, RDF.type, MOBILITE[type_clean]))
+        g.add((ticket_uri, MOBILITE.prix, Literal(ticket_data.prix, datatype=XSD.float)))
+        g.add((ticket_uri, MOBILITE.statutTicket, Literal(ticket_data.statutTicket, datatype=XSD.string)))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 Ticket sauvegardé localement: {ticket_data.id}")
+
+        # Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        INSERT DATA {{
+            mobilite:{ticket_data.id} a mobilite:{type_clean} ;
+                         mobilite:prix "{ticket_data.prix}"^^xsd:float ;
+                         mobilite:statutTicket "{ticket_data.statutTicket}"^^xsd:string .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            # Si un utilisateur est spécifié, créer la relation
+            if ticket_data.utilisateur_id and ticket_data.utilisateur_id.strip():
+                relation_result = create_ticket_relation(ticket_data.utilisateur_id, ticket_data.id)
+                print(f"🔗 Résultat de la relation: {relation_result}")
+            
+            # Synchroniser le fichier local avec Fuseki
+            sync_from_fuseki_to_local()
+            
+            response_message = f"🎫 Ticket '{ticket_data.id}' créé avec succès (type: {type_clean})."
+            if ticket_data.utilisateur_id:
+                response_message += f" Associé à l'utilisateur '{ticket_data.utilisateur_id}'."
+                
+            return {
+                "message": response_message,
+                "ticket_id": ticket_data.id,
+                "type": type_clean,
+                "prix": ticket_data.prix,
+                "statut": ticket_data.statutTicket,
+                "utilisateur_associe": ticket_data.utilisateur_id
+            }
+        else:
+            return {"error": f"❌ Échec de la création du ticket '{ticket_data.id}' dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création du ticket: {str(e)}")
+        import traceback
+        print(f"📝 Stack trace: {traceback.format_exc()}")
+        return {"error": f"Erreur lors de la création du ticket: {str(e)}"}
+@app.get("/debug/ticket_types/")
+def debug_ticket_types():
+    """Endpoint pour déboguer les types de tickets"""
+    valid_types = ["TicketBus", "TicketMetro", "TicketParking"]
+    
+    test_cases = [
+        "TicketMetro",
+        "TicketBus", 
+        "TicketParking",
+        "ticketmetro",
+        "TICKETMETRO"
+    ]
+    
+    results = {}
+    for test_case in test_cases:
+        type_clean = test_case
+        results[test_case] = {
+            "original": test_case,
+            "cleaned": type_clean,
+            "is_valid": type_clean in valid_types,
+            "valid_types": valid_types
+        }
+    
+    return {
+        "valid_types": valid_types,
+        "test_results": results
+    }
+def create_ticket_relation(utilisateur_id: str, ticket_id: str):
+    """
+    Crée la relation entre un utilisateur et un ticket avec vérification
+    """
+    try:
+        print(f"🔗 Tentative de création de relation: {utilisateur_id} -> {ticket_id}")
+        
+        # Vérifier si l'utilisateur existe
+        check_user_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{utilisateur_id} a ?type .
+            FILTER(STRSTARTS(STR(?type), STR(mobilite:)))
+        }}
+        """
+        
+        sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql_check.setReturnFormat(JSON)
+        sparql_check.setQuery(check_user_query)
+        user_exists = sparql_check.query().convert()["boolean"]
+        
+        if not user_exists:
+            return {"error": f"❌ L'utilisateur '{utilisateur_id}' n'existe pas"}
+        
+        # Vérifier si la relation existe déjà
+        check_relation_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{utilisateur_id} mobilite:possedeTicket mobilite:{ticket_id} .
+        }}
+        """
+        
+        sparql_check.setQuery(check_relation_query)
+        relation_exists = sparql_check.query().convert()["boolean"]
+        
+        if relation_exists:
+            return {"warning": f"⚠️ La relation existe déjà entre {utilisateur_id} et {ticket_id}"}
+
+        # Ajouter au graphe local
+        utilisateur_uri = MOBILITE[utilisateur_id]
+        ticket_uri = MOBILITE[ticket_id]
+        g.add((utilisateur_uri, MOBILITE.possedeTicket, ticket_uri))
+        g.serialize("mobilite.rdf", format="xml")
+
+        # Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        INSERT DATA {{
+            mobilite:{utilisateur_id} mobilite:possedeTicket mobilite:{ticket_id} .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            return {"message": f"✅ Relation créée: {utilisateur_id} → {ticket_id}"}
+        else:
+            return {"error": f"❌ Échec de création de la relation dans Fuseki"}
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de la relation: {str(e)}")
+        import traceback
+        print(f"📝 Stack trace: {traceback.format_exc()}")
+        return {"error": f"Erreur lors de la création de la relation: {str(e)}"}
+# ======================
+# 🎫 ENDPOINT POUR RÉCUPÉRER TOUS LES TICKETS
+# ======================
+
+# ======================
+# 🎫 ENDPOINT POUR RÉCUPÉRER TOUS LES TICKETS - VERSION CORRIGÉE
+# ======================
+
+@app.get("/tickets/")
+def get_all_tickets():
+    """
+    Récupère tous les tickets avec leurs détails complets - VERSION CORRIGÉE
+    """
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        # REQUÊTE SPARQL CORRIGÉE POUR BIEN RÉCUPÉRER LES TICKETS SANS UTILISATEUR
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT ?ticket ?type ?prix ?statut ?utilisateur_id ?nom_utilisateur ?prenom_utilisateur WHERE {{
+          ?ticket a ?type .
+          ?type rdfs:subClassOf* mobilite:Ticket .
+          
+          OPTIONAL {{ ?ticket mobilite:prix ?prix . }}
+          OPTIONAL {{ ?ticket mobilite:statutTicket ?statut . }}
+          
+          # Récupération OPTIONNELLE de l'utilisateur
+          OPTIONAL {{ 
+            ?utilisateur mobilite:possedeTicket ?ticket .
+            BIND(STR(?utilisateur) AS ?utilisateur_id)
+            OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilisateur . }}
+            OPTIONAL {{ ?utilisateur mobilite:prenom ?prenom_utilisateur . }}
+          }}
+        }}
+        ORDER BY DESC(?ticket)
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        print(f"🔍 Résultats bruts SPARQL: {len(results['results']['bindings'])} entrées")
+
+        tickets = []
+        seen_tickets = set()
+
+        for r in results["results"]["bindings"]:
+            ticket_uri = r["ticket"]["value"]
+            
+            # Éviter les doublons
+            if ticket_uri in seen_tickets:
+                continue
+            seen_tickets.add(ticket_uri)
+                
+            # Extraire l'ID du ticket
+            ticket_id = ticket_uri.split("#")[-1] if "#" in ticket_uri else ticket_uri.split("/")[-1]
+            
+            # Déterminer le type de ticket
+            type_uri = r["type"]["value"]
+            ticket_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+            
+            # Récupérer l'utilisateur associé (peut être vide)
+            utilisateur_data = None
+            if "utilisateur_id" in r and r["utilisateur_id"]["value"]:
+                utilisateur_uri = r["utilisateur_id"]["value"]
+                utilisateur_id = utilisateur_uri.split("#")[-1] if "#" in utilisateur_uri else utilisateur_uri.split("/")[-1]
+                
+                nom_utilisateur = r.get("nom_utilisateur", {}).get("value", "")
+                prenom_utilisateur = r.get("prenom_utilisateur", {}).get("value", "")
+                
+                utilisateur_data = {
+                    "id": utilisateur_id,
+                    "nom": nom_utilisateur,
+                    "prenom": prenom_utilisateur,
+                    "display_name": f"{prenom_utilisateur} {nom_utilisateur}".strip() or utilisateur_id
+                }
+            
+            # Prix avec valeur par défaut
+            prix_value = 0.0
+            if "prix" in r:
+                try:
+                    prix_value = float(r["prix"]["value"])
+                except (ValueError, TypeError):
+                    prix_value = 0.0
+            
+            ticket_data = {
+                "id": ticket_id,
+                "type": ticket_type,
+                "type_ticket": ticket_type,
+                "prix": prix_value,
+                "statutTicket": r.get("statut", {}).get("value", "actif"),
+                "utilisateur": utilisateur_data
+            }
+            tickets.append(ticket_data)
+
+        print(f"✅ {len(tickets)} tickets uniques trouvés")
+        return tickets
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des tickets: {str(e)}")
+        # Fallback vers le graphe local
+        return get_tickets_from_local_graph()
+def get_tickets_from_local_graph():
+    """
+    Récupère les tickets depuis le graphe local (fallback)
+    """
+    try:
+        tickets = []
+        # Chercher toutes les instances de Ticket et ses sous-classes
+        ticket_classes = ["TicketBus", "TicketMetro", "TicketParking"]
+        
+        for ticket_class in ticket_classes:
+            for s, p, o in g.triples((None, RDF.type, MOBILITE[ticket_class])):
+                ticket_data = {
+                    "id": str(s).split("#")[-1],
+                    "type": ticket_class,
+                    "type_ticket": ticket_class,
+                    "prix": 0.0,
+                    "statutTicket": "actif",
+                    "utilisateur": None
+                }
+                
+                # Récupérer les propriétés
+                for s2, p2, o2 in g.triples((s, None, None)):
+                    if str(p2) == str(MOBILITE.prix):
+                        try:
+                            ticket_data["prix"] = float(o2)
+                        except (ValueError, TypeError):
+                            ticket_data["prix"] = 0.0
+                    elif str(p2) == str(MOBILITE.statutTicket):
+                        ticket_data["statutTicket"] = str(o2)
+                
+                tickets.append(ticket_data)
+        
+        print(f"📊 Fallback: {len(tickets)} tickets du graphe local")
+        return tickets
+        
+    except Exception as e:
+        print(f"❌ Erreur dans le fallback local: {e}")
+        return []
+# ======================
+# 🎫 ENDPOINT POUR RÉCUPÉRER LES TICKETS D'UN UTILISATEUR
+# ======================
+
+@app.get("/tickets/utilisateur/{utilisateur_id}")
+def get_tickets_by_utilisateur(utilisateur_id: str):
+    """
+    Récupère tous les tickets d'un utilisateur spécifique
+    """
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT ?ticket ?type ?prix ?statut WHERE {{
+            mobilite:{utilisateur_id} mobilite:possedeTicket ?ticket .
+            ?ticket a ?type .
+            ?type rdfs:subClassOf* mobilite:Ticket .
+            
+            OPTIONAL {{ ?ticket mobilite:prix ?prix . }}
+            OPTIONAL {{ ?ticket mobilite:statutTicket ?statut . }}
+        }}
+        ORDER BY ?ticket
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        tickets = []
+        for r in results["results"]["bindings"]:
+            ticket_uri = r["ticket"]["value"]
+            ticket_id = ticket_uri.split("#")[-1] if "#" in ticket_uri else ticket_uri.split("/")[-1]
+            
+            type_uri = r["type"]["value"]
+            ticket_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+            
+            tickets.append({
+                "id": ticket_id,
+                "type": ticket_type,
+                "prix": float(r["prix"]["value"]) if "prix" in r else 0.0,
+                "statutTicket": r.get("statut", {}).get("value", "actif")
+            })
+
+        return {
+            "utilisateur_id": utilisateur_id,
+            "tickets": tickets,
+            "count": len(tickets)
+        }
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des tickets de {utilisateur_id}: {str(e)}")
+        return {"utilisateur_id": utilisateur_id, "tickets": [], "count": 0, "error": str(e)}
 # ======================
 # 🧠 INTELLIGENCE ARTIFICIELLE AVEC OLLAMA
 # ======================
@@ -980,31 +1407,6 @@ def add_donne_avis(link: DonneAvis):
 # 🎫 TICKETS - ENDPOINTS
 # ======================
 
-@app.post("/add_ticket/")
-def add_ticket(ticket: Ticket):
-    type_clean = ticket.type_ticket.capitalize()
-    valid_types = ["TicketBus", "TicketMetro", "TicketParking"]
-
-    if type_clean not in valid_types:
-        return {"error": f"❌ Type '{ticket.type_ticket}' invalide. Doit être un de {valid_types}"}
-
-    ticket_uri = MOBILITE[ticket.id]
-    g.add((ticket_uri, RDF.type, MOBILITE[type_clean]))
-    g.add((ticket_uri, MOBILITE.prix, Literal(ticket.prix, datatype=XSD.float)))
-    g.add((ticket_uri, MOBILITE.statutTicket, Literal(ticket.statutTicket, datatype=XSD.string)))
-    g.serialize("mobilite_updated.rdf", format="xml")
-
-    insert_query = f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-    INSERT DATA {{
-        mobilite:{ticket.id} a mobilite:{type_clean} ;
-                     mobilite:prix "{ticket.prix}"^^xsd:float ;
-                     mobilite:statutTicket "{ticket.statutTicket}"^^xsd:string .
-    }}
-    """
-    send_to_fuseki(insert_query)
-    return {"message": f"🎫 Ticket '{ticket.id}' ajouté (type: {type_clean})."}
 
 @app.post("/personne/possede_ticket/")
 def add_possede_ticket(link: PossedeTicket):
