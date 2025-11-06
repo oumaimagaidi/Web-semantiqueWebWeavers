@@ -1,4 +1,3 @@
-// src/components/Layout.jsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import axios from "axios";
@@ -24,9 +23,9 @@ export default function Layout() {
     setParticles(newParticles);
   }, []);
 
-  // Menu items pour les utilisateurs simples - SEULEMENT L'IA
+  // Menu items pour les utilisateurs simples - AUCUN ACCÈS
   const userMenuItems = [
-    { path: "/app/ai", icon: "🧠", label: "INTELLIGENCE ARTIFICIELLE", role: "user" }
+    // Les users normaux n'ont plus accès à l'application
   ];
 
   // Menu items réservés aux admins
@@ -50,12 +49,12 @@ export default function Layout() {
     if (userRole === "admin") {
       return adminMenuItems;
     }
-    return userMenuItems; // Retourne seulement l'IA pour les users simples
+    return userMenuItems; // Retourne tableau vide pour les users simples
   };
 
   const menuItems = getMenuItems();
 
-  // Vérifier l'authentification et le rôle
+  // Vérifier l'authentification et le rôle - AVEC STOCKAGE DU RÔLE
   useEffect(() => {
     const checkAuthAndRole = async () => {
       const token = localStorage.getItem("token");
@@ -68,18 +67,26 @@ export default function Layout() {
         try {
           // Vérifier le rôle de l'utilisateur
           const response = await axios.get(`http://localhost:8000/auth/user-role/${userObj.email}`);
-          setUserRole(response.data.role);
+          const role = response.data.role;
+          setUserRole(role);
           
-          // Rediriger les users simples vers la page AI si ils essaient d'accéder à une page admin
-          if (response.data.role === "user" && location.pathname !== "/app/ai") {
-            const isAdminPath = adminMenuItems.some(item => item.path === location.pathname && item.role === "admin");
-            if (isAdminPath) {
-              navigate("/app/ai", { replace: true });
-            }
+          // STOCKER LE RÔLE DANS LOCALSTORAGE POUR UN ACCÈS IMMÉDIAT
+          localStorage.setItem("userRole", role);
+          
+          // Rediriger les users simples vers la HOME s'ils essaient d'accéder à une page admin
+          if (role === "user") {
+            console.log("Utilisateur normal détecté, redirection vers la home page");
+            navigate("/", { replace: true });
+            return;
           }
         } catch (error) {
           console.error("Erreur de vérification du rôle:", error);
-          setUserRole("user"); // Rôle par défaut
+          const defaultRole = "user";
+          setUserRole(defaultRole);
+          localStorage.setItem("userRole", defaultRole);
+          
+          // Rediriger vers home en cas d'erreur aussi
+          navigate("/", { replace: true });
         }
       } else {
         console.log("Utilisateur non connecté, redirection vers /signin");
@@ -94,6 +101,7 @@ export default function Layout() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("userRole"); // NETTOYER LE RÔLE AUSSI
     setUser(null);
     setUserRole("user");
     navigate("/signin");
@@ -104,6 +112,14 @@ export default function Layout() {
   };
 
   const isAdmin = userRole === "admin";
+
+  // Vérifier si l'utilisateur actuel a accès à la page courante
+  const hasAccessToCurrentPage = () => {
+    if (isAdmin) return true; // Les admins ont accès à tout
+    
+    // Les users simples n'ont accès à AUCUNE page de l'app
+    return false;
+  };
 
   if (loading) {
     return (
@@ -129,7 +145,8 @@ export default function Layout() {
     );
   }
 
-  if (!user) {
+  // Si l'utilisateur n'est pas admin, ne rien afficher (sera redirigé)
+  if (!user || !isAdmin) {
     return null;
   }
 
@@ -179,7 +196,7 @@ export default function Layout() {
           <div style={styles.logoTextContainer}>
             <span style={styles.logoText}>smart city</span>
             <span style={styles.logoSubtext}>
-              {isAdmin ? "CONTROL PANEL" : "ASSISTANT IA"}
+              {isAdmin ? "CONTROL PANEL" : "ACCÈS RESTREINT"}
             </span>
           </div>
         </div>
@@ -190,7 +207,7 @@ export default function Layout() {
             ...styles.roleBadge,
             ...(isAdmin ? styles.roleBadgeAdmin : styles.roleBadgeUser)
           }}>
-            {isAdmin ? "🚀 ADMIN" : "🧠 UTILISATEUR IA"}
+            {isAdmin ? "🚀 ADMIN" : "⛔ ACCÈS REFUSÉ"}
           </div>
         </div>
         
@@ -207,12 +224,11 @@ export default function Layout() {
               <span style={styles.navIcon}>{item.icon}</span>
               <span style={styles.navLabel}>{item.label}</span>
               {isActiveLink(item.path) && <div style={styles.activeIndicator}></div>}
-              {/* Icône de cadenas supprimée */}
             </Link>
           ))}
         </nav>
         
-        {/* Indicateur de permissions - Simplifié pour les users */}
+        {/* Indicateur de permissions - Uniquement pour les admins */}
         <div style={styles.permissionsPanel}>
           <div style={styles.permissionsHeader}>PERMISSIONS ACTUELLES</div>
           <div style={styles.permissionsList}>
@@ -234,16 +250,16 @@ export default function Layout() {
             ) : (
               <>
                 <div style={styles.permissionItem}>
-                  <span style={styles.permissionIcon}>🧠</span>
-                  <span>Assistant Intelligence Artificielle</span>
-                </div>
-                <div style={styles.permissionItem}>
-                  <span style={styles.permissionIcon}>✅</span>
-                  <span>Requêtes en langage naturel</span>
-                </div>
-                <div style={styles.permissionItem}>
                   <span style={styles.permissionIcon}>⛔</span>
-                  <span>Accès limité aux autres modules</span>
+                  <span>Accès réservé aux administrateurs</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>🔒</span>
+                  <span>Fonctionnalités restreintes</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>🏠</span>
+                  <span>Redirection vers l'accueil</span>
                 </div>
               </>
             )}
@@ -271,7 +287,7 @@ export default function Layout() {
                 <div style={styles.userStatus}>
                   <div style={styles.statusIndicator}></div>
                   <span style={styles.statusText}>
-                    {isAdmin ? "ADMIN CONNECTÉ" : "ASSISTANT IA ACTIVÉ"}
+                    {isAdmin ? "ADMIN CONNECTÉ" : "ACCÈS REFUSÉ"}
                   </span>
                 </div>
               </div>
@@ -292,14 +308,14 @@ export default function Layout() {
           
           <div style={styles.headerLeft}>
             <h1 style={styles.headerTitle}>
-              {menuItems.find(item => item.path === location.pathname)?.label || 'INTELLIGENCE ARTIFICIELLE'}
+              {menuItems.find(item => item.path === location.pathname)?.label || 'DASHBOARD ADMIN'}
             </h1>
             <div style={styles.breadcrumb}>
               <span style={styles.breadcrumbText}>
-                {isAdmin ? "SYSTÈME NEXUS ADMIN / " : "ASSISTANT IA / "}
+                {isAdmin ? "SYSTÈME NEXUS ADMIN / " : "ACCÈS RESTREINT / "}
               </span>
               <span style={styles.breadcrumbCurrent}>
-                {menuItems.find(item => item.path === location.pathname)?.label || 'INTERFACE DE REQUÊTES'}
+                {menuItems.find(item => item.path === location.pathname)?.label || 'TABLEAU DE BORD'}
               </span>
             </div>
           </div>
@@ -324,7 +340,7 @@ export default function Layout() {
                 <div style={styles.userDetails}>
                   <div style={styles.userName}>{user.prenom} {user.nom}</div>
                   <div style={styles.userRole}>
-                    {isAdmin ? 'ADMINISTRATEUR SYSTÈME' : 'UTILISATEUR ASSISTANT IA'}
+                    {isAdmin ? 'ADMINISTRATEUR SYSTÈME' : 'ACCÈS NON AUTORISÉ'}
                   </div>
                 </div>
                 <div style={styles.headerActions}>
@@ -347,20 +363,20 @@ export default function Layout() {
         {/* Page content */}
         <main style={styles.main}>
           <div style={styles.contentWrapper}>
-            {/* Protection pour les users simples */}
-            {!isAdmin && location.pathname !== "/app/ai" ? (
+            {/* Protection pour les users simples - NE DOIT JAMAIS S'AFFICHER CAR REDIRIGÉS PLUS TÔT */}
+            {!hasAccessToCurrentPage() ? (
               <div style={styles.accessDenied}>
                 <div style={styles.accessDeniedIcon}>⛔</div>
                 <h2 style={styles.accessDeniedTitle}>ACCÈS RESTREINT</h2>
                 <p style={styles.accessDeniedText}>
                   Cette fonctionnalité est réservée aux administrateurs du système.
-                  <br />Votre accès est limité à l'Assistant Intelligence Artificielle.
+                  <br />Votre accès est limité aux fonctionnalités publiques.
                 </p>
                 <button 
-                  onClick={() => navigate("/app/ai")}
+                  onClick={() => navigate("/")}
                   style={styles.accessDeniedButton}
                 >
-                  ACCÉDER À L'ASSISTANT IA
+                  RETOURNER À L'ACCUEIL
                 </button>
               </div>
             ) : (
@@ -374,7 +390,7 @@ export default function Layout() {
           <div style={styles.footerGlow}></div>
           <div style={styles.footerContent}>
             <div style={styles.footerText}>
-              © 2025 NEXUS URBAN INTELLIGENCE NETWORK. {isAdmin ? "ACCÈS ADMIN COMPLET" : "ASSISTANT IA ACTIVÉ"}
+              © 2025 NEXUS URBAN INTELLIGENCE NETWORK. {isAdmin ? "ACCÈS ADMIN COMPLET" : "ACCÈS RESTREINT"}
             </div>
             <div style={styles.footerLinks}>
               <span style={styles.footerLink}>PROTOCOLE DE CONFIDENTIALITÉ</span>
@@ -384,7 +400,7 @@ export default function Layout() {
             <div style={styles.securityBadge}>
               <span style={styles.securityIcon}>🛡️</span>
               <span style={styles.securityText}>
-                {isAdmin ? "SYSTÈME CERTIFIÉ ISO-27001" : "ACCÈS SÉCURISÉ IA"}
+                {isAdmin ? "SYSTÈME CERTIFIÉ ISO-27001" : "ACCÈS SÉCURISÉ"}
               </span>
             </div>
           </div>
@@ -428,7 +444,7 @@ export default function Layout() {
           }
           100% { 
             transform: rotate(360deg) scale(1);
-            box-shadow: 0 0 20px #00ffff;
+            boxShadow: 0 0 20px #00ffff;
           }
         }
 
@@ -457,7 +473,7 @@ export default function Layout() {
   );
 }
 
-// Styles complets
+// Styles complets (inchangés)
 const styles = {
   container: {
     display: 'flex',
@@ -595,10 +611,10 @@ const styles = {
     boxShadow: '0 0 15px rgba(255, 0, 255, 0.2)'
   },
   roleBadgeUser: {
-    backgroundColor: 'rgba(0, 255, 255, 0.1)',
-    color: '#00ffff',
-    borderColor: 'rgba(0, 255, 255, 0.3)',
-    boxShadow: '0 0 15px rgba(0, 255, 255, 0.2)'
+    backgroundColor: 'rgba(255, 0, 0, 0.1)',
+    color: '#ff6b6b',
+    borderColor: 'rgba(255, 0, 0, 0.3)',
+    boxShadow: '0 0 15px rgba(255, 0, 0, 0.2)'
   },
   nav: {
     flex: 1,

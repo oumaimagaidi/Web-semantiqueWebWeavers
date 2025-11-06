@@ -113,7 +113,12 @@ export default function App() {
             <Profile />
           </PageWithHeader>
         } />
-        
+        {/* NOUVELLE ROUTE - Assistant IA publique */}
+        <Route path="/assistant" element={
+          <PageWithHeader>
+            <AIQuery />
+          </PageWithHeader>
+        } />
         {/* Pages d'authentification SANS Header */}
         <Route path="/signin" element={
           <PageWithoutHeader>
@@ -208,30 +213,27 @@ export default function App() {
 }
 
 // Composant de redirection intelligente
+// Composant de redirection intelligente - REDIRECTION IMMÉDIATE
 function NavigateToAppropriatePage() {
-  const [targetPath, setTargetPath] = useState("/app/ai");
-
-  useEffect(() => {
-    determineRedirectPath();
-  }, []);
-
-  const determineRedirectPath = async () => {
-    try {
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (user && user.email) {
-        const response = await axios.get(`http://localhost:8000/auth/user-role/${user.email}`);
-        if (response.data.role === "admin") {
-          setTargetPath("/app/dashboard");
-        }
-      }
-    } catch (error) {
-      console.error("Erreur de détermination du rôle:", error);
-    }
-  };
-
-  return <Navigate to={targetPath} replace />;
+  // Vérifier IMMÉDIATEMENT le rôle stocké dans localStorage
+  const userRole = localStorage.getItem("userRole");
+  const user = JSON.parse(localStorage.getItem("user"));
+  
+  console.log("Redirection - User:", user?.email, "Rôle:", userRole);
+  
+  if (!user) {
+    return <Navigate to="/signin" replace />;
+  }
+  
+  // REDIRECTION IMMÉDIATE - Admin vers dashboard, User vers HOME
+  if (userRole === "admin") {
+    console.log("Redirection ADMIN vers /app/dashboard");
+    return <Navigate to="/app/dashboard" replace />;
+  } else {
+    console.log("Redirection USER vers / (home)");
+    return <Navigate to="/" replace />;
+  }
 }
-
 const pageWithHeaderStyles = {
   minHeight: "100vh",
   backgroundColor: "#0a0a0a",
