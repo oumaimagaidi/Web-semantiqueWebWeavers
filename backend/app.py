@@ -265,6 +265,61 @@ def clean_sparql_query(query: str) -> str:
 
     return query.strip()
 # ======================
+# 🔐 GESTION DES RÔLES (Version ultra-simplifiée)
+# ======================
+
+@app.get("/auth/user-role/{email}")
+def get_user_role(email: str):
+    """Récupérer le rôle d'un utilisateur - SEUL admin@smartcity.com est admin"""
+    
+    # Logique ultra-simple : seul admin@smartcity.com est admin
+    if email == "admin@smartcity.com":
+        role = "admin"
+    else:
+        role = "user"  # Tous les autres emails sont users
+    
+    return {
+        "email": email, 
+        "role": role,
+        "is_admin": role == "admin"
+    }
+
+@app.get("/auth/check-access/{email}")
+def check_user_access(email: str):
+    """Vérifier les permissions d'accès"""
+    role = "admin" if email == "admin@smartcity.com" else "user"
+    
+    return {
+        "email": email,
+        "role": role,
+        "permissions": ["all"] if role == "admin" else ["ai_query_only"],
+        "allowed_pages": "all" if role == "admin" else ["/ai"],
+        "message": "Admin système" if role == "admin" else "Utilisateur standard"
+    }
+
+# Endpoint de debug pour vérifier
+@app.get("/auth/debug-roles/")
+def debug_roles():
+    """Debug des rôles"""
+    test_emails = [
+        "admin@smartcity.com",
+        "user@smartcity.com", 
+        "test@gmail.com",
+        "wala@test.com",
+        "oumaima@insat.tn",
+        "anything@anything.com"
+    ]
+    
+    results = {}
+    for email in test_emails:
+        role = "admin" if email == "admin@smartcity.com" else "user"
+        results[email] = role
+    
+    return {
+        "rule": "SEUL admin@smartcity.com est ADMIN, tous les autres sont USERS",
+        "test_results": results
+    }
+# ======================
 # 🎫 ENDPOINT POUR CRÉER UN TICKET
 # ======================
 

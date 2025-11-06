@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./pages/Layout";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
@@ -16,7 +16,64 @@ import SmartCitiesPage from "./pages/SmartCitiesPage";
 import TrajetsPage from "./pages/TrajetsPage";
 import Statistiques from "./pages/StatistiquesPage";
 import Profile from "./pages/Profile";
-import Header from "./pages/Header"; // Import du Header
+import Header from "./pages/Header";
+import { useState, useEffect } from "react";
+import axios from "axios";
+
+// Composant de route protégée
+function ProtectedRoute({ children, requiredRole = "user" }) {
+  const [isAuthorized, setIsAuthorized] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    checkAuthorization();
+  }, []);
+
+  const checkAuthorization = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      const token = localStorage.getItem("token");
+      
+      if (!user || !token) {
+        setIsAuthorized(false);
+        return;
+      }
+
+      // Vérifier le rôle de l'utilisateur
+      const response = await axios.get(`http://localhost:8000/auth/user-role/${user.email}`);
+      const role = response.data.role;
+      setUserRole(role);
+
+      if (requiredRole === "admin" && role !== "admin") {
+        setIsAuthorized(false);
+      } else {
+        setIsAuthorized(true);
+      }
+    } catch (error) {
+      console.error("Erreur de vérification:", error);
+      setIsAuthorized(false);
+    }
+  };
+
+  if (isAuthorized === null) {
+    return (
+      <div style={loadingStyles}>
+        <div style={spinnerStyles}></div>
+        <p>Vérification des permissions...</p>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    // Rediriger vers la page AIQuery pour les users simples
+    if (userRole === "user") {
+      return <Navigate to="/app/ai" replace />;
+    }
+    return <Navigate to="/signin" replace />;
+  }
+
+  return children;
+}
 
 // Composant pour les pages avec Header
 function PageWithHeader({ children }) {
@@ -49,6 +106,8 @@ export default function App() {
             <Home />
           </PageWithHeader>
         } />
+        
+        {/* Page de profil publique */}
         <Route path="/profile" element={
           <PageWithHeader>
             <Profile />
@@ -67,21 +126,74 @@ export default function App() {
           </PageWithoutHeader>
         } />
         
-        {/* Application principale avec layout PROTÉGÉ - Header géré dans Layout */}
-        <Route path="/app" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="users" element={<Users />} />
-          <Route path="transports" element={<Transports />} />
-          <Route path="infrastructures" element={<InfrastructuresPage />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="avis" element={<AvisPage />} />
-          <Route path="recharge" element={<RechargePage />} />
-          <Route path="tickets" element={<TicketsPage />} />
-          <Route path="smartcitiespage" element={<SmartCitiesPage />} />
-          <Route path="trajetspage" element={<TrajetsPage />} />
-          <Route path="statistiques" element={<Statistiques />} />
+        {/* Application principale avec layout PROTÉGÉ */}
+        <Route path="/app" element={
+          <ProtectedRoute requiredRole="user">
+            <Layout />
+          </ProtectedRoute>
+        }>
+          {/* Routes ADMIN seulement */}
+          <Route path="dashboard" element={
+            <ProtectedRoute requiredRole="admin">
+              <Dashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="users" element={
+            <ProtectedRoute requiredRole="admin">
+              <Users />
+            </ProtectedRoute>
+          } />
+          <Route path="transports" element={
+            <ProtectedRoute requiredRole="admin">
+              <Transports />
+            </ProtectedRoute>
+          } />
+          <Route path="infrastructures" element={
+            <ProtectedRoute requiredRole="admin">
+              <InfrastructuresPage />
+            </ProtectedRoute>
+          } />
+          <Route path="events" element={
+            <ProtectedRoute requiredRole="admin">
+              <EventsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="avis" element={
+            <ProtectedRoute requiredRole="admin">
+              <AvisPage />
+            </ProtectedRoute>
+          } />
+          <Route path="recharge" element={
+            <ProtectedRoute requiredRole="admin">
+              <RechargePage />
+            </ProtectedRoute>
+          } />
+          <Route path="tickets" element={
+            <ProtectedRoute requiredRole="admin">
+              <TicketsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="smartcitiespage" element={
+            <ProtectedRoute requiredRole="admin">
+              <SmartCitiesPage />
+            </ProtectedRoute>
+          } />
+          <Route path="trajetspage" element={
+            <ProtectedRoute requiredRole="admin">
+              <TrajetsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="statistiques" element={
+            <ProtectedRoute requiredRole="admin">
+              <Statistiques />
+            </ProtectedRoute>
+          } />
+          
+          {/* Route accessible à TOUS les utilisateurs connectés */}
           <Route path="ai" element={<AIQuery />} />
-          <Route path="profile" element={<Profile />} />
+          
+          {/* Route par défaut - redirige selon le rôle */}
+          <Route index element={<NavigateToAppropriatePage />} />
         </Route>
 
         {/* Redirection par défaut */}
@@ -95,11 +207,57 @@ export default function App() {
   );
 }
 
+// Composant de redirection intelligente
+function NavigateToAppropriatePage() {
+  const [targetPath, setTargetPath] = useState("/app/ai");
+
+  useEffect(() => {
+    determineRedirectPath();
+  }, []);
+
+  const determineRedirectPath = async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (user && user.email) {
+        const response = await axios.get(`http://localhost:8000/auth/user-role/${user.email}`);
+        if (response.data.role === "admin") {
+          setTargetPath("/app/dashboard");
+        }
+      }
+    } catch (error) {
+      console.error("Erreur de détermination du rôle:", error);
+    }
+  };
+
+  return <Navigate to={targetPath} replace />;
+}
+
 const pageWithHeaderStyles = {
   minHeight: "100vh",
   backgroundColor: "#0a0a0a",
 };
 
 const mainContentStyles = {
-  paddingTop: "80px", // Compense la hauteur du header fixe
+  paddingTop: "80px",
+};
+
+const loadingStyles = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: "100vh",
+  backgroundColor: "#0a0a0a",
+  color: "#00ffff",
+  fontFamily: "'Orbitron', sans-serif"
+};
+
+const spinnerStyles = {
+  width: "40px",
+  height: "40px",
+  border: "3px solid rgba(0, 255, 255, 0.3)",
+  borderTop: "3px solid #00ffff",
+  borderRadius: "50%",
+  animation: "spin 1s linear infinite",
+  marginBottom: "1rem"
 };

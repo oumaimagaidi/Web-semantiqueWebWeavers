@@ -1,11 +1,13 @@
 // src/components/Layout.jsx
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import axios from "axios";
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState("user");
   const [loading, setLoading] = useState(true);
   const [particles, setParticles] = useState([]);
 
@@ -22,45 +24,86 @@ export default function Layout() {
     setParticles(newParticles);
   }, []);
 
-  const menuItems = [
-    { path: "/app", icon: "🏠", label: "DASHBOARD" },
-    { path: "/app/users", icon: "👤", label: "UTILISATEURS" },
-    { path: "/app/transports", icon: "🚆", label: "RÉSEAUX" },
-    { path: "/app/events", icon: "📅", label: "ÉVÉNEMENTS" },
-    { path: "/app/infrastructures", icon: "🏗", label: "INFRASTRUCTURES" },
-    { path: "/app/avis", icon: "💬", label: "AVIS" },
-    { path: "/app/recharge", icon: "⚡", label: "RECHARGE" },
-    { path: "/app/tickets", icon: "🎫", label: "TICKETS" },
-    { path: "/app/smartcitiespage", icon: "🏙", label: "SMARTCITY" },
-    { path: "/app/trajetspage", icon: "🛣", label: "TRAJETS" },
-    { path: "/app/statistiques", icon: "📊", label: "STATISTIQUES" },
-    { path: "/app/ai", icon: "🧠", label: "INTELLIGENCE ARTIFICIELLE" }
+  // Menu items pour les utilisateurs simples - SEULEMENT L'IA
+  const userMenuItems = [
+    { path: "/app/ai", icon: "🧠", label: "INTELLIGENCE ARTIFICIELLE", role: "user" }
   ];
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("user");
-    
-    if (token && userData) {
-      setUser(JSON.parse(userData));
-      setLoading(false);
-    } else {
-      console.log("Utilisateur non connecté, redirection vers /signin");
-      navigate("/signin", { replace: true });
-      setLoading(false);
+  // Menu items réservés aux admins
+  const adminMenuItems = [
+    { path: "/app", icon: "🏠", label: "DASHBOARD", role: "admin" },
+    { path: "/app/users", icon: "👤", label: "UTILISATEURS", role: "admin" },
+    { path: "/app/transports", icon: "🚆", label: "RÉSEAUX", role: "admin" },
+    { path: "/app/events", icon: "📅", label: "ÉVÉNEMENTS", role: "admin" },
+    { path: "/app/infrastructures", icon: "🏗", label: "INFRASTRUCTURES", role: "admin" },
+    { path: "/app/avis", icon: "💬", label: "AVIS", role: "admin" },
+    { path: "/app/recharge", icon: "⚡", label: "RECHARGE", role: "admin" },
+    { path: "/app/tickets", icon: "🎫", label: "TICKETS", role: "admin" },
+    { path: "/app/smartcitiespage", icon: "🏙", label: "SMARTCITY", role: "admin" },
+    { path: "/app/trajetspage", icon: "🛣", label: "TRAJETS", role: "admin" },
+    { path: "/app/statistiques", icon: "📊", label: "STATISTIQUES", role: "admin" },
+    { path: "/app/ai", icon: "🧠", label: "INTELLIGENCE ARTIFICIELLE", role: "admin" }
+  ];
+
+  // Menu items combinés selon le rôle
+  const getMenuItems = () => {
+    if (userRole === "admin") {
+      return adminMenuItems;
     }
-  }, [navigate]);
+    return userMenuItems; // Retourne seulement l'IA pour les users simples
+  };
+
+  const menuItems = getMenuItems();
+
+  // Vérifier l'authentification et le rôle
+  useEffect(() => {
+    const checkAuthAndRole = async () => {
+      const token = localStorage.getItem("token");
+      const userData = localStorage.getItem("user");
+      
+      if (token && userData) {
+        const userObj = JSON.parse(userData);
+        setUser(userObj);
+        
+        try {
+          // Vérifier le rôle de l'utilisateur
+          const response = await axios.get(`http://localhost:8000/auth/user-role/${userObj.email}`);
+          setUserRole(response.data.role);
+          
+          // Rediriger les users simples vers la page AI si ils essaient d'accéder à une page admin
+          if (response.data.role === "user" && location.pathname !== "/app/ai") {
+            const isAdminPath = adminMenuItems.some(item => item.path === location.pathname && item.role === "admin");
+            if (isAdminPath) {
+              navigate("/app/ai", { replace: true });
+            }
+          }
+        } catch (error) {
+          console.error("Erreur de vérification du rôle:", error);
+          setUserRole("user"); // Rôle par défaut
+        }
+      } else {
+        console.log("Utilisateur non connecté, redirection vers /signin");
+        navigate("/signin", { replace: true });
+      }
+      setLoading(false);
+    };
+
+    checkAuthAndRole();
+  }, [navigate, location.pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
+    setUserRole("user");
     navigate("/signin");
   };
 
   const isActiveLink = (path) => {
     return location.pathname === path;
   };
+
+  const isAdmin = userRole === "admin";
 
   if (loading) {
     return (
@@ -135,7 +178,19 @@ export default function Layout() {
           </div>
           <div style={styles.logoTextContainer}>
             <span style={styles.logoText}>smart city</span>
-            <span style={styles.logoSubtext}>CONTROL PANEL</span>
+            <span style={styles.logoSubtext}>
+              {isAdmin ? "CONTROL PANEL" : "ASSISTANT IA"}
+            </span>
+          </div>
+        </div>
+        
+        {/* Badge de rôle */}
+        <div style={styles.roleBadgeContainer}>
+          <div style={{
+            ...styles.roleBadge,
+            ...(isAdmin ? styles.roleBadgeAdmin : styles.roleBadgeUser)
+          }}>
+            {isAdmin ? "🚀 ADMIN" : "🧠 UTILISATEUR IA"}
           </div>
         </div>
         
@@ -152,9 +207,48 @@ export default function Layout() {
               <span style={styles.navIcon}>{item.icon}</span>
               <span style={styles.navLabel}>{item.label}</span>
               {isActiveLink(item.path) && <div style={styles.activeIndicator}></div>}
+              {/* Icône de cadenas supprimée */}
             </Link>
           ))}
         </nav>
+        
+        {/* Indicateur de permissions - Simplifié pour les users */}
+        <div style={styles.permissionsPanel}>
+          <div style={styles.permissionsHeader}>PERMISSIONS ACTUELLES</div>
+          <div style={styles.permissionsList}>
+            {isAdmin ? (
+              <>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>✅</span>
+                  <span>Accès complet au système</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>🔓</span>
+                  <span>Toutes les fonctionnalités</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>⚡</span>
+                  <span>Privilèges administrateur</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>🧠</span>
+                  <span>Assistant Intelligence Artificielle</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>✅</span>
+                  <span>Requêtes en langage naturel</span>
+                </div>
+                <div style={styles.permissionItem}>
+                  <span style={styles.permissionIcon}>⛔</span>
+                  <span>Accès limité aux autres modules</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
         
         <div style={styles.sidebarFooter}>
           {user && (
@@ -176,7 +270,9 @@ export default function Layout() {
                 <div style={styles.userEmailSidebar}>{user.email}</div>
                 <div style={styles.userStatus}>
                   <div style={styles.statusIndicator}></div>
-                  <span style={styles.statusText}>CONNECTÉ</span>
+                  <span style={styles.statusText}>
+                    {isAdmin ? "ADMIN CONNECTÉ" : "ASSISTANT IA ACTIVÉ"}
+                  </span>
                 </div>
               </div>
               <button onClick={handleLogout} style={styles.logoutButton} title="Déconnexion">
@@ -196,12 +292,14 @@ export default function Layout() {
           
           <div style={styles.headerLeft}>
             <h1 style={styles.headerTitle}>
-              {menuItems.find(item => item.path === location.pathname)?.label || 'DASHBOARD PRINCIPAL'}
+              {menuItems.find(item => item.path === location.pathname)?.label || 'INTELLIGENCE ARTIFICIELLE'}
             </h1>
             <div style={styles.breadcrumb}>
-              <span style={styles.breadcrumbText}>SYSTÈME NEXUS / </span>
+              <span style={styles.breadcrumbText}>
+                {isAdmin ? "SYSTÈME NEXUS ADMIN / " : "ASSISTANT IA / "}
+              </span>
               <span style={styles.breadcrumbCurrent}>
-                {menuItems.find(item => item.path === location.pathname)?.label || 'TABLEAU DE BORD'}
+                {menuItems.find(item => item.path === location.pathname)?.label || 'INTERFACE DE REQUÊTES'}
               </span>
             </div>
           </div>
@@ -225,13 +323,17 @@ export default function Layout() {
                 </div>
                 <div style={styles.userDetails}>
                   <div style={styles.userName}>{user.prenom} {user.nom}</div>
-                  <div style={styles.userRole}>{user.type_personne || 'UTILISATEUR PRIVILÉGIÉ'}</div>
+                  <div style={styles.userRole}>
+                    {isAdmin ? 'ADMINISTRATEUR SYSTÈME' : 'UTILISATEUR ASSISTANT IA'}
+                  </div>
                 </div>
                 <div style={styles.headerActions}>
-                  <button style={styles.notificationButton}>
-                    <span style={styles.notificationIcon}>🔔</span>
-                    <div style={styles.notificationBadge}>3</div>
-                  </button>
+                  {isAdmin && (
+                    <button style={styles.notificationButton}>
+                      <span style={styles.notificationIcon}>🔔</span>
+                      <div style={styles.notificationBadge}>3</div>
+                    </button>
+                  )}
                   <button onClick={handleLogout} style={styles.logoutButtonHeader}>
                     <span style={styles.logoutIconHeader}>⏻</span>
                     <span>DÉCONNEXION</span>
@@ -245,7 +347,25 @@ export default function Layout() {
         {/* Page content */}
         <main style={styles.main}>
           <div style={styles.contentWrapper}>
-            <Outlet />
+            {/* Protection pour les users simples */}
+            {!isAdmin && location.pathname !== "/app/ai" ? (
+              <div style={styles.accessDenied}>
+                <div style={styles.accessDeniedIcon}>⛔</div>
+                <h2 style={styles.accessDeniedTitle}>ACCÈS RESTREINT</h2>
+                <p style={styles.accessDeniedText}>
+                  Cette fonctionnalité est réservée aux administrateurs du système.
+                  <br />Votre accès est limité à l'Assistant Intelligence Artificielle.
+                </p>
+                <button 
+                  onClick={() => navigate("/app/ai")}
+                  style={styles.accessDeniedButton}
+                >
+                  ACCÉDER À L'ASSISTANT IA
+                </button>
+              </div>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
 
@@ -254,7 +374,7 @@ export default function Layout() {
           <div style={styles.footerGlow}></div>
           <div style={styles.footerContent}>
             <div style={styles.footerText}>
-              © 2025 NEXUS URBAN INTELLIGENCE NETWORK. TOUS DROITS CRYPTÉS.
+              © 2025 NEXUS URBAN INTELLIGENCE NETWORK. {isAdmin ? "ACCÈS ADMIN COMPLET" : "ASSISTANT IA ACTIVÉ"}
             </div>
             <div style={styles.footerLinks}>
               <span style={styles.footerLink}>PROTOCOLE DE CONFIDENTIALITÉ</span>
@@ -263,7 +383,9 @@ export default function Layout() {
             </div>
             <div style={styles.securityBadge}>
               <span style={styles.securityIcon}>🛡️</span>
-              <span style={styles.securityText}>SYSTÈME CERTIFIÉ ISO-27001</span>
+              <span style={styles.securityText}>
+                {isAdmin ? "SYSTÈME CERTIFIÉ ISO-27001" : "ACCÈS SÉCURISÉ IA"}
+              </span>
             </div>
           </div>
         </footer>
@@ -335,210 +457,251 @@ export default function Layout() {
   );
 }
 
+// Styles complets
 const styles = {
   container: {
-    minHeight: "100vh",
-    display: "flex",
-    backgroundColor: "#0a0a0a",
-    background: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)",
-    position: "relative",
-    overflow: "hidden",
-    fontFamily: "'Orbitron', 'Rajdhani', monospace"
+    display: 'flex',
+    minHeight: '100vh',
+    backgroundColor: '#0a0a0a',
+    background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%)',
+    color: '#ffffff',
+    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+    position: 'relative',
+    overflow: 'hidden'
   },
   neuralNetwork: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    overflow: "hidden",
-    zIndex: 0
+    pointerEvents: 'none',
+    zIndex: 1
   },
   neuralParticle: {
-    position: "absolute",
-    backgroundColor: "#00ffff",
-    borderRadius: "50%",
-    animation: "neuralFloat 15s ease-in-out infinite",
-    boxShadow: "0 0 8px #00ffff, 0 0 16px #00ffff"
+    position: 'absolute',
+    backgroundColor: '#00ffff',
+    borderRadius: '50%',
+    animation: 'neuralFloat 10s ease-in-out infinite',
+    boxShadow: '0 0 8px #00ffff, 0 0 16px #00ffff'
   },
   dataStream: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0
-  },
-  dataLine: {
-    position: "absolute",
-    width: "1px",
-    height: "100px",
-    background: "linear-gradient(180deg, transparent, #00ffff, transparent)",
-    animation: "dataFlow 4s linear infinite",
-    opacity: 0.4
-  },
-  sidebar: {
-    width: '300px',
-    backgroundColor: "rgba(10, 15, 35, 0.85)",
-    color: 'white',
-    display: 'flex',
-    flexDirection: 'column',
-    flexShrink: 0,
-    borderRight: "1px solid rgba(0, 255, 255, 0.3)",
-    boxShadow: "0 0 40px rgba(0, 255, 255, 0.1)",
-    backdropFilter: "blur(15px)",
-    position: "relative",
-    zIndex: 2
-  },
-  sidebarGlow: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    background: "radial-gradient(circle at left, rgba(0,255,255,0.1) 0%, transparent 70%)",
-    animation: "hologramGlow 4s ease-in-out infinite",
-    pointerEvents: "none"
+    pointerEvents: 'none'
+  },
+  dataLine: {
+    position: 'absolute',
+    width: '1px',
+    height: '100%',
+    background: 'linear-gradient(to bottom, transparent, #00ffff, transparent)',
+    animation: 'dataFlow 3s linear infinite',
+    opacity: 0.3
+  },
+  sidebar: {
+    width: '280px',
+    background: 'rgba(10, 15, 30, 0.9)',
+    backdropFilter: 'blur(20px)',
+    borderRight: '1px solid rgba(0, 255, 255, 0.2)',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    zIndex: 2,
+    boxShadow: '0 0 30px rgba(0, 255, 255, 0.1)'
+  },
+  sidebarGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '2px',
+    background: 'linear-gradient(90deg, #00ffff, #ff00ff)',
+    boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
   },
   logo: {
-    padding: '2rem 1.5rem',
-    borderBottom: '1px solid rgba(0, 255, 255, 0.2)',
+    padding: '2rem 1.5rem 1.5rem',
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem'
+    gap: '1rem',
+    borderBottom: '1px solid rgba(0, 255, 255, 0.1)'
   },
   logoOrb: {
-    position: "relative",
-    width: "50px",
-    height: "50px",
-    background: "linear-gradient(135deg, #00ffff, #0099ff)",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 0 20px rgba(0, 255, 255, 0.5)"
+    position: 'relative',
+    width: '50px',
+    height: '50px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
   },
   orbGlow: {
-    position: "absolute",
-    top: "-3px",
-    left: "-3px",
-    right: "-3px",
-    bottom: "-3px",
-    background: "linear-gradient(135deg, #00ffff, #0099ff)",
-    borderRadius: "50%",
-    filter: "blur(8px)",
-    opacity: 0.5,
-    animation: "pulse 2s ease-in-out infinite"
+    position: 'absolute',
+    top: '-2px',
+    left: '-2px',
+    right: '-2px',
+    bottom: '-2px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+    filter: 'blur(8px)',
+    opacity: 0.6,
+    animation: 'pulse 2s ease-in-out infinite'
   },
   logoIcon: {
     fontSize: '1.5rem',
-    filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.5))'
+    zIndex: 1
   },
   logoTextContainer: {
-    textAlign: 'left'
+    display: 'flex',
+    flexDirection: 'column'
   },
   logoText: {
-    fontSize: '1.5rem',
-    fontWeight: '900',
-    background: 'linear-gradient(135deg, #00ffff, #0099ff)',
+    fontSize: '1.2rem',
+    fontWeight: '700',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',
-    display: 'block',
-    lineHeight: '1',
-    letterSpacing: '2px'
+    letterSpacing: '1px'
   },
   logoSubtext: {
-    fontSize: '0.6rem',
-    fontWeight: '300',
+    fontSize: '0.7rem',
     color: '#88ffff',
-    letterSpacing: '1.5px',
-    display: 'block',
+    fontWeight: '300',
+    letterSpacing: '2px',
     marginTop: '0.2rem'
+  },
+  roleBadgeContainer: {
+    padding: '0 1.5rem 1rem 1.5rem',
+  },
+  roleBadge: {
+    padding: '0.4rem 1rem',
+    borderRadius: '1rem',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    letterSpacing: '0.5px',
+    textAlign: 'center',
+    border: '1px solid',
+    backdropFilter: 'blur(10px)'
+  },
+  roleBadgeAdmin: {
+    backgroundColor: 'rgba(255, 0, 255, 0.1)',
+    color: '#ff00ff',
+    borderColor: 'rgba(255, 0, 255, 0.3)',
+    boxShadow: '0 0 15px rgba(255, 0, 255, 0.2)'
+  },
+  roleBadgeUser: {
+    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+    color: '#00ffff',
+    borderColor: 'rgba(0, 255, 255, 0.3)',
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.2)'
   },
   nav: {
     flex: 1,
+    padding: '1rem 0',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem',
-    padding: '1.5rem 1rem'
+    gap: '0.5rem'
   },
   navLink: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem',
-    padding: '1rem 1.25rem',
-    borderRadius: '0.75rem',
-    textDecoration: 'none',
+    padding: '1rem 1.5rem',
     color: '#88ffff',
+    textDecoration: 'none',
     transition: 'all 0.3s ease',
-    fontSize: '0.8rem',
-    fontWeight: '500',
-    letterSpacing: '0.5px',
     position: 'relative',
     border: '1px solid transparent'
   },
   navLinkActive: {
-    backgroundColor: 'rgba(0, 255, 255, 0.1)',
-    color: '#00ffff',
+    background: 'linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(255, 0, 255, 0.1))',
+    color: '#ffffff',
     border: '1px solid rgba(0, 255, 255, 0.3)',
-    boxShadow: '0 0 20px rgba(0, 255, 255, 0.2)'
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.2)'
   },
   navIcon: {
-    fontSize: '1.125rem',
-    width: '24px',
-    textAlign: 'center',
-    filter: 'drop-shadow(0 0 5px currentColor)'
+    fontSize: '1.2rem',
+    marginRight: '1rem',
+    width: '20px',
+    textAlign: 'center'
   },
   navLabel: {
-    flex: 1,
-    fontSize: '0.75rem',
-    fontWeight: '600'
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    letterSpacing: '0.5px',
+    flex: 1
   },
   activeIndicator: {
     position: 'absolute',
     right: '1rem',
     width: '6px',
     height: '6px',
-    backgroundColor: '#00ffff',
     borderRadius: '50%',
-    boxShadow: '0 0 10px #00ffff'
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+    boxShadow: '0 0 8px #00ffff'
+  },
+  permissionsPanel: {
+    margin: '1rem 1rem 2rem 1rem',
+    padding: '1rem',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: '0.75rem',
+    border: '1px solid rgba(0, 255, 255, 0.1)'
+  },
+  permissionsHeader: {
+    fontSize: '0.65rem',
+    fontWeight: '700',
+    color: '#88ffff',
+    marginBottom: '0.75rem',
+    letterSpacing: '0.5px',
+    textAlign: 'center'
+  },
+  permissionsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
+  },
+  permissionItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontSize: '0.6rem',
+    color: '#88ffff'
+  },
+  permissionIcon: {
+    fontSize: '0.7rem'
   },
   sidebarFooter: {
-    padding: '1.5rem 1.25rem',
-    borderTop: '1px solid rgba(0, 255, 255, 0.2)'
+    padding: '1.5rem',
+    borderTop: '1px solid rgba(0, 255, 255, 0.1)'
   },
   userInfoSidebar: {
     display: 'flex',
     alignItems: 'center',
     gap: '1rem',
-    marginBottom: '1rem',
-    padding: '1rem',
-    backgroundColor: 'rgba(0, 255, 255, 0.05)',
-    borderRadius: '1rem',
-    border: '1px solid rgba(0, 255, 255, 0.1)'
+    marginBottom: '1rem'
   },
   userAvatarSidebar: {
     position: 'relative',
-    width: '3rem',
-    height: '3rem',
+    width: '40px',
+    height: '40px',
     borderRadius: '50%',
-    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    overflow: 'hidden',
-    flexShrink: 0
+    justifyContent: 'center'
   },
   avatarImageSidebar: {
     width: '100%',
     height: '100%',
-    objectFit: 'cover',
-    borderRadius: '50%'
+    borderRadius: '50%',
+    objectFit: 'cover'
   },
   avatarIconSidebar: {
-    fontSize: '1.25rem'
+    fontSize: '1rem'
   },
   avatarGlow: {
     position: 'absolute',
@@ -547,61 +710,62 @@ const styles = {
     right: '-2px',
     bottom: '-2px',
     borderRadius: '50%',
-    border: '2px solid #00ffff',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     filter: 'blur(4px)',
-    opacity: 0.6,
+    opacity: 0.5,
     animation: 'pulse 2s ease-in-out infinite'
   },
   userDetailsSidebar: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column'
+    flex: 1
   },
   userNameSidebar: {
     fontSize: '0.8rem',
     fontWeight: '600',
-    color: '#00ffff',
-    marginBottom: '0.25rem'
+    color: '#ffffff'
   },
   userEmailSidebar: {
     fontSize: '0.65rem',
     color: '#88ffff',
-    opacity: 0.8,
-    marginBottom: '0.5rem'
+    opacity: 0.8
   },
   userStatus: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem'
+    gap: '0.5rem',
+    marginTop: '0.2rem'
   },
   statusIndicator: {
     width: '6px',
     height: '6px',
-    backgroundColor: '#00ff88',
     borderRadius: '50%',
-    boxShadow: '0 0 8px #00ff88'
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    boxShadow: '0 0 8px #00ff88',
+    animation: 'pulse 2s ease-in-out infinite'
   },
   statusText: {
     fontSize: '0.6rem',
-    color: '#00ff88',
+    color: '#88ffff',
     fontWeight: '600'
   },
   logoutButton: {
     background: 'rgba(255, 0, 0, 0.1)',
     border: '1px solid rgba(255, 0, 0, 0.3)',
     color: '#ff6b6b',
-    cursor: 'pointer',
     padding: '0.5rem',
     borderRadius: '0.5rem',
-    fontSize: '0.875rem',
+    cursor: 'pointer',
     transition: 'all 0.3s ease',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center'
   },
+  logoutIcon: {
+    fontSize: '0.8rem'
+  },
   version: {
-    fontSize: '0.7rem',
-    color: 'rgba(136, 255, 255, 0.6)',
+    fontSize: '0.6rem',
+    color: '#88ffff',
+    opacity: 0.6,
     textAlign: 'center',
     letterSpacing: '1px'
   },
@@ -609,29 +773,27 @@ const styles = {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    minWidth: 0,
     position: 'relative',
-    zIndex: 1
+    zIndex: 2
   },
   header: {
-    backgroundColor: 'rgba(10, 15, 35, 0.9)',
+    background: 'rgba(10, 15, 30, 0.8)',
+    backdropFilter: 'blur(20px)',
+    borderBottom: '1px solid rgba(0, 255, 255, 0.2)',
     padding: '1.5rem 2rem',
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottom: '1px solid rgba(0, 255, 255, 0.3)',
-    boxShadow: '0 0 30px rgba(0, 255, 255, 0.1)',
-    backdropFilter: 'blur(15px)',
+    justifyContent: 'space-between',
     position: 'relative'
   },
   headerGlow: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    background: 'linear-gradient(90deg, transparent, rgba(0,255,255,0.05), transparent)',
-    animation: 'hologramGlow 3s ease-in-out infinite'
+    height: '1px',
+    background: 'linear-gradient(90deg, transparent, #00ffff, transparent)',
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.3)'
   },
   headerLeft: {
     display: 'flex',
@@ -641,12 +803,11 @@ const styles = {
   headerTitle: {
     fontSize: '1.5rem',
     fontWeight: '700',
-    background: 'linear-gradient(135deg, #ffffff, #88ffff)',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',
-    margin: 0,
-    letterSpacing: '1px'
+    margin: 0
   },
   breadcrumb: {
     display: 'flex',
@@ -656,11 +817,11 @@ const styles = {
   breadcrumbText: {
     fontSize: '0.8rem',
     color: '#88ffff',
-    fontWeight: '300'
+    opacity: 0.7
   },
   breadcrumbCurrent: {
     fontSize: '0.8rem',
-    color: '#00ffff',
+    color: '#ffffff',
     fontWeight: '600'
   },
   headerRight: {
@@ -670,36 +831,33 @@ const styles = {
   userInfo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1.5rem',
-    padding: '0.75rem 1.5rem',
-    backgroundColor: 'rgba(0, 255, 255, 0.05)',
+    gap: '1rem',
+    padding: '0.5rem 1rem',
+    background: 'rgba(0, 0, 0, 0.3)',
     borderRadius: '1rem',
-    border: '1px solid rgba(0, 255, 255, 0.2)'
+    border: '1px solid rgba(0, 255, 255, 0.1)'
   },
   userAvatar: {
     position: 'relative',
-    width: '3rem',
-    height: '3rem',
+    width: '45px',
+    height: '45px',
     borderRadius: '50%',
-    backgroundColor: 'rgba(0, 255, 255, 0.2)',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    color: 'white',
-    overflow: 'hidden',
-    flexShrink: 0
+    fontWeight: '600',
+    fontSize: '0.9rem'
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    objectFit: 'cover',
-    borderRadius: '50%'
+    borderRadius: '50%',
+    objectFit: 'cover'
   },
   avatarText: {
-    fontSize: '0.875rem',
-    fontWeight: 'bold'
+    color: '#0a0a0a',
+    fontWeight: '700'
   },
   avatarPulse: {
     position: 'absolute',
@@ -708,9 +866,9 @@ const styles = {
     right: '-2px',
     bottom: '-2px',
     borderRadius: '50%',
-    border: '2px solid #00ffff',
+    background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
     filter: 'blur(4px)',
-    opacity: 0.6,
+    opacity: 0.5,
     animation: 'pulse 2s ease-in-out infinite'
   },
   userDetails: {
@@ -720,84 +878,124 @@ const styles = {
   userName: {
     fontSize: '0.9rem',
     fontWeight: '600',
-    color: '#00ffff',
-    marginBottom: '0.25rem'
+    color: '#ffffff'
   },
   userRole: {
     fontSize: '0.7rem',
     color: '#88ffff',
-    fontWeight: '300',
-    letterSpacing: '0.5px'
+    fontWeight: '600'
   },
   headerActions: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem'
+    gap: '0.5rem',
+    marginLeft: '1rem'
   },
   notificationButton: {
     position: 'relative',
-    background: 'rgba(255, 255, 255, 0.1)',
-    border: '1px solid rgba(255, 255, 255, 0.2)',
+    background: 'rgba(136, 255, 255, 0.1)',
+    border: '1px solid rgba(136, 255, 255, 0.3)',
     color: '#88ffff',
-    cursor: 'pointer',
     padding: '0.5rem',
     borderRadius: '0.5rem',
-    fontSize: '1rem',
+    cursor: 'pointer',
     transition: 'all 0.3s ease'
   },
   notificationIcon: {
-    filter: 'drop-shadow(0 0 5px currentColor)'
+    fontSize: '0.9rem'
   },
   notificationBadge: {
     position: 'absolute',
     top: '-5px',
     right: '-5px',
-    backgroundColor: '#ff00ff',
-    color: 'white',
+    background: 'linear-gradient(135deg, #ff00ff, #ff6b6b)',
+    color: '#ffffff',
     fontSize: '0.6rem',
-    fontWeight: 'bold',
+    fontWeight: '700',
     width: '16px',
     height: '16px',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 0 8px #ff00ff'
+    justifyContent: 'center'
   },
   logoutButtonHeader: {
-    background: 'linear-gradient(135deg, #ff6b6b, #ff00ff)',
-    color: 'white',
+    background: 'linear-gradient(135deg, #ff5252, #e100e1)',
     border: 'none',
-    cursor: 'pointer',
-    padding: '0.75rem 1.25rem',
+    color: '#ffffff',
+    padding: '0.6rem 1rem',
     borderRadius: '0.75rem',
-    fontSize: '0.75rem',
+    cursor: 'pointer',
     fontWeight: '600',
-    transition: 'all 0.3s ease',
+    fontSize: '0.8rem',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    letterSpacing: '0.5px',
-    boxShadow: '0 0 15px rgba(255, 0, 255, 0.3)'
+    transition: 'all 0.3s ease',
+    letterSpacing: '0.5px'
   },
   logoutIconHeader: {
-    fontSize: '1rem'
+    fontSize: '0.9rem'
   },
   main: {
     flex: 1,
     padding: '2rem',
-    backgroundColor: 'transparent',
     overflow: 'auto',
     position: 'relative'
   },
   contentWrapper: {
-    animation: 'slideIn 0.5s ease-out'
+    maxWidth: '1200px',
+    margin: '0 auto',
+    width: '100%'
+  },
+  accessDenied: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '60vh',
+    textAlign: 'center',
+    padding: '2rem'
+  },
+  accessDeniedIcon: {
+    fontSize: '4rem',
+    marginBottom: '1.5rem'
+  },
+  accessDeniedTitle: {
+    fontSize: '1.5rem',
+    fontWeight: '700',
+    color: '#ff6b6b',
+    marginBottom: '1rem',
+    background: 'linear-gradient(135deg, #ff6b6b, #ff00ff)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text'
+  },
+  accessDeniedText: {
+    color: '#88ffff',
+    fontSize: '1rem',
+    marginBottom: '2rem',
+    maxWidth: '400px',
+    lineHeight: '1.5'
+  },
+  accessDeniedButton: {
+    background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+    color: '#0a0a0a',
+    border: 'none',
+    padding: '1rem 2rem',
+    borderRadius: '1rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    letterSpacing: '1px',
+    boxShadow: '0 0 25px rgba(0, 255, 255, 0.4)',
+    transition: 'all 0.3s ease'
   },
   footer: {
-    backgroundColor: 'rgba(10, 15, 35, 0.9)',
+    background: 'rgba(10, 15, 30, 0.8)',
+    backdropFilter: 'blur(20px)',
     borderTop: '1px solid rgba(0, 255, 255, 0.2)',
     padding: '1.5rem 2rem',
-    backdropFilter: 'blur(15px)',
     position: 'relative'
   },
   footerGlow: {
@@ -806,50 +1004,48 @@ const styles = {
     left: 0,
     right: 0,
     height: '1px',
-    background: 'linear-gradient(90deg, transparent, #00ffff, transparent)'
+    background: 'linear-gradient(90deg, transparent, #00ffff, transparent)',
+    boxShadow: '0 0 15px rgba(0, 255, 255, 0.3)'
   },
   footerContent: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     maxWidth: '1200px',
     margin: '0 auto'
   },
   footerText: {
+    fontSize: '0.8rem',
     color: '#88ffff',
-    fontSize: '0.7rem',
-    fontWeight: '300',
-    letterSpacing: '0.5px'
+    opacity: 0.7
   },
   footerLinks: {
     display: 'flex',
     gap: '2rem'
   },
   footerLink: {
+    fontSize: '0.7rem',
     color: '#88ffff',
-    fontSize: '0.65rem',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    fontWeight: '300',
-    letterSpacing: '0.5px'
+    transition: 'all 0.3s ease',
+    opacity: 0.7
   },
   securityBadge: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
     padding: '0.5rem 1rem',
-    backgroundColor: 'rgba(0, 255, 255, 0.1)',
-    borderRadius: '2rem',
+    background: 'rgba(0, 255, 255, 0.1)',
+    borderRadius: '1rem',
     border: '1px solid rgba(0, 255, 255, 0.3)'
   },
   securityIcon: {
     fontSize: '0.8rem'
   },
   securityText: {
+    fontSize: '0.7rem',
     color: '#88ffff',
-    fontSize: '0.6rem',
-    fontWeight: '600',
-    letterSpacing: '0.5px'
+    fontWeight: '600'
   }
 };
 
@@ -900,98 +1096,3 @@ const loadingStyles = {
     letterSpacing: '2px'
   }
 };
-
-// Media queries pour le responsive
-const mediaQueries = `
-  @media (max-width: 768px) {
-    .sidebar {
-      width: 80px;
-    }
-    .nav-label, .logo-text, .user-details-sidebar, .user-details, .breadcrumb, .logout-button-header span:last-child {
-      display: none;
-    }
-    .logo {
-      justify-content: center;
-      padding: 1rem 0.5rem;
-    }
-    .nav-link {
-      justify-content: center;
-      padding: 0.75rem 0.5rem;
-    }
-    .header {
-      padding: 1rem;
-    }
-    .header-title {
-      font-size: 1.25rem;
-    }
-    .main {
-      padding: 1rem;
-    }
-    .footer-content {
-      flex-direction: column;
-      gap: 1rem;
-      text-align: center;
-    }
-    .user-info-sidebar {
-      justify-content: center;
-    }
-    .user-info {
-      padding: 0.5rem 1rem;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .sidebar {
-      width: 60px;
-    }
-    .nav-icon {
-      font-size: 1rem;
-    }
-    .header {
-      flex-direction: column;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-    .header-right {
-      width: 100%;
-    }
-    .user-info {
-      width: 100%;
-      justify-content: center;
-    }
-  }
-
-  .nav-link:hover:not(.nav-link-active) {
-    background-color: rgba(0, 255, 255, 0.05);
-    border: 1px solid rgba(0, 255, 255, 0.2);
-    transform: translateX(5px);
-  }
-
-  .logout-button:hover {
-    background-color: rgba(255, 0, 0, 0.2);
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.3);
-  }
-
-  .logout-button-header:hover {
-    background: linear-gradient(135deg, #ff5252, #e100e1);
-    box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
-    transform: translateY(-2px);
-  }
-
-  .notification-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 0 15px rgba(136, 255, 255, 0.3);
-  }
-
-  .footer-link:hover {
-    color: #00ffff;
-    text-shadow: 0 0 8px #00ffff;
-  }
-`;
-
-// Injection des media queries
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = mediaQueries;
-  document.head.appendChild(styleSheet);
-}
