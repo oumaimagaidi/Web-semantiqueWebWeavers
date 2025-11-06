@@ -32,7 +32,7 @@ export default function AIQuery() {
     
     try {
       // CORRECTION : endpoint /ask/ au lieu de /ask_ia/
-      const res = await axios.post("http://localhost:8000/ask/", { 
+      const res = await axios.post("http://localhost:8000/ask", { 
         question: question.trim() 
       });
       

@@ -18,6 +18,20 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import json
 from datetime import datetime  # Ajoutez cette ligne
+############################
+from fastapi import HTTPException
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from rdflib import Graph, Namespace
+import ollama
+import re
+
+from utils.util_ import SPARQLGenerator
+from config.queries import QUERY_PATTERNS 
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
 
 # ======================
 # 🔧 CONFIGURATION
@@ -27,6 +41,7 @@ load_dotenv()
 # Configuration Ollama
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "codellama:7b"
+
 
 FUSEKI_BASE = "http://localhost:3030"
 FUSEKI_QUERY_URL = f"{FUSEKI_BASE}/smartcity/sparql"
@@ -373,6 +388,61 @@ def clean_sparql_query(query: str) -> str:
 
 
 
+# ======================
+# 🔐 GESTION DES RÔLES (Version ultra-simplifiée)
+# ======================
+
+@app.get("/auth/user-role/{email}")
+def get_user_role(email: str):
+    """Récupérer le rôle d'un utilisateur - SEUL admin@smartcity.com est admin"""
+    
+    # Logique ultra-simple : seul admin@smartcity.com est admin
+    if email == "admin@smartcity.com":
+        role = "admin"
+    else:
+        role = "user"  # Tous les autres emails sont users
+    
+    return {
+        "email": email, 
+        "role": role,
+        "is_admin": role == "admin"
+    }
+
+@app.get("/auth/check-access/{email}")
+def check_user_access(email: str):
+    """Vérifier les permissions d'accès"""
+    role = "admin" if email == "admin@smartcity.com" else "user"
+    
+    return {
+        "email": email,
+        "role": role,
+        "permissions": ["all"] if role == "admin" else ["ai_query_only"],
+        "allowed_pages": "all" if role == "admin" else ["/ai"],
+        "message": "Admin système" if role == "admin" else "Utilisateur standard"
+    }
+
+# Endpoint de debug pour vérifier
+@app.get("/auth/debug-roles/")
+def debug_roles():
+    """Debug des rôles"""
+    test_emails = [
+        "admin@smartcity.com",
+        "user@smartcity.com", 
+        "test@gmail.com",
+        "wala@test.com",
+        "oumaima@insat.tn",
+        "anything@anything.com"
+    ]
+    
+    results = {}
+    for email in test_emails:
+        role = "admin" if email == "admin@smartcity.com" else "user"
+        results[email] = role
+    
+    return {
+        "rule": "SEUL admin@smartcity.com est ADMIN, tous les autres sont USERS",
+        "test_results": results
+    }
 # ======================
 # 🎫 ENDPOINT POUR CRÉER UN TICKET
 # ======================
@@ -886,6 +956,105 @@ Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobi
         raise Exception("❌ Ollama n'est pas démarré. Lancez 'ollama serve'")
     except Exception as e:
         raise Exception(f"❌ Erreur Ollama : {str(e)}")
+# def generate_sparql_with_ollama(user_question: str) -> str:
+#     """
+#     Génère une requête SPARQL en utilisant Ollama
+#     """
+#     prompt = f"""
+# Tu es un expert en RDF et SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL valides.
+
+# CONTEXTE ONTOLOGIE MOBILITÉ :
+# - Namespace : PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+# - Classes principales : 
+#   Personne, Conducteur, Piéton, Voyageur
+#   ReseauTransport, TransportPublic, TransportPrive, MobiliteDouce
+#   Bus, Metro, Voiture, Velo, Trottinette
+#   Infrastructure, Route, StationsBus, StationsMetro, Parking, Batiment
+#   Trajet, TrajetOptimal, TrajetCourt, TrajetRecommandé
+#   Avis, AvisPositif, AvisNegatif
+#   Ticket, TicketBus, TicketMetro, TicketParking
+#   StationRecharge, RechargeElectrique, RechargeGaz
+#   Trafic, Accident, Embouteillage, Radar
+#   Statistiques, StatistiquesAccidents, StatistiquesPollution, StatistiquesUtilisation
+#   SmartCity
+
+# - Propriétés de données :
+#   nom, prenom, age, email, telephone, dateNaissance, genre, nationalite, languePreferee
+#   dateInscription, statutCompte, niveauAbonnement, scoreFidelite, preferencesAccessibilite
+#   numeroPermis, dateObtentionPermis, categoriePermis, pointsPermis, experienceConduite
+#   distance, duree, scoreOptimisation, niveauTrafic, heureDepart, heureArrivee
+#   vitesseMoyenne, consommationEnergie, emissionsCO2, nombreArrets, conditionsMeteo
+#   temperature, scoreSecurite, scoreConfort
+#   marque, modele, anneeFabrication, immatriculation, couleur, kilometrage
+#   niveauCarburant, consommationMoyenne
+#   commentaire, note, dateAvis, langueAvis, categorieAvis, scoreUtilite, verifie, nombreSignalements
+#   numeroTicket, prix, dateAchat, dateExpiration, typeTicket, classeTicket, zoneValidite
+#   statutTicket, methodePaiement, nombreValidations
+#   adresse, coordonneesGPS, dateConstruction, etatMaintenance, capaciteAccueil
+#   niveauAccessibilite, horairesOuverture, superficie
+#   capacite, prixKwh, disponible, typeConnecteur, puissanceMax, tempsRechargeMoyen
+#   heureOuverture, heureFermeture, operateur
+#   intensite, dureeIncident, causeIncident, gravite, nombreVehiculesImpliques
+#   vitesseMoyenneTrafic, niveauService
+#   vitesseMaximale, typeRadar, dateInstallation, etatFonctionnement, nombreInfractions
+#   valeur, dateMesure, unite, periodeMesure, margeErreur, niveauConfiance, tendance, sourceDonnees
+
+# - Propriétés objet :
+#   effectueTrajet, utiliseReseauTransport, donneAvis, possedeTicket, habiteA, travailleA
+#   prefereMoyenTransport, frequenteZone, commenceA, terminaA, utiliseMoyenTransport
+#   proposePar, appartientA, circuleSur, conduitPar, utiliseStationRecharge
+#   concerneTransport, concerneInfrastructure, valablePour, acheteA, donneAccesA
+#   estConnecteA, disposeDe, accueilleStation, contient, estSurveillePar, alimentePar
+#   maintenuPar, seProduitSur, affecteTrajet, genereAlerte, mesureSur, generePar
+
+# QUESTION À TRADUIRE : "{user_question}"
+
+# INSTRUCTIONS STRICTES :
+# 1. Génère UNIQUEMENT la requête SPARQL complète et valide
+# 2. Pas de texte explicatif, pas de commentaires, pas de notes
+# 3. Pas de "SPARQL:" ou autres préfixes textuels
+# 4. Pas de backticks Markdown
+# 5. Utilise obligatoirement le préfixe mobilite:
+# 6. Pour les hiérarchies, utilise rdfs:subClassOf*
+# 7. Sois précis dans les relations
+
+# EXEMPLE :
+# Question: "Liste toutes les personnes"
+# Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> SELECT ?personne WHERE {{ ?personne a mobilite:Personne . }}
+#     """
+
+#     try:
+#         response = requests.post(
+#             f"{OLLAMA_BASE_URL}/api/generate",
+#             json={
+#                 "model": OLLAMA_MODEL,
+#                 "prompt": prompt,
+#                 "stream": False,
+#                 "options": {
+#                     "temperature": 0.1,
+#                     "top_p": 0.9,
+#                     "num_predict": 500
+#                 }
+#             },
+#             timeout=120
+#         )
+#         response.raise_for_status()
+        
+#         result = response.json()
+#         sparql_query = result["response"].strip()
+        
+#         print(f"📝 Réponse brute d'Ollama:\n{sparql_query}")
+        
+#         cleaned_query = clean_sparql_query(sparql_query)
+#         print(f"🧹 Requête nettoyée:\n{cleaned_query}")
+        
+#         return cleaned_query
+        
+#     except requests.exceptions.ConnectionError:
+#         raise Exception("❌ Ollama n'est pas démarré. Lancez 'ollama serve'")
+#     except Exception as e:
+#         raise Exception(f"❌ Erreur Ollama : {str(e)}")
+
 
 
 
@@ -1227,8 +1396,70 @@ def format_sparql_results(results):
             else:
                 item[key] = value["value"]
         formatted.append(item)
+
+# @app.post("/ask/")
+# async def ask_question(question_data: dict):
+#     """
+#     Endpoint principal : Reçoit une question en français, génère la requête SPARQL avec Ollama,
+#     l'exécute sur Fuseki et retourne les résultats.
+#     """
+#     try:
+#         user_question = question_data.get("question", "").strip()
+#         if not user_question:
+#             raise HTTPException(status_code=400, detail="La question est requise")
+
+#         print(f"🧠 Question reçue: {user_question}")
+
+#         # 1. Génération de la requête SPARQL avec Ollama
+#         print("🔄 Génération de la requête SPARQL avec Ollama...")
+#         sparql_query = generate_sparql_with_ollama(user_question)
+#         print(f"📝 Requête SPARQL générée:\n{sparql_query}")
+
+#         # 2. Validation de la requête
+#         if not validate_sparql_query(sparql_query):
+#             raise HTTPException(status_code=400, detail="La requête SPARQL générée n'est pas valide")
+
+#         # 3. Exécution de la requête sur Fuseki
+#         print("🚀 Exécution de la requête sur Fuseki...")
+#         results = execute_sparql_query(sparql_query)
+        
+#         if results is None:
+#             raise HTTPException(status_code=500, detail="Erreur lors de l'exécution de la requête SPARQL")
+
+#         # 4. Formatage des résultats
+#         formatted_results = format_sparql_results(results)
+        
+#         return {
+#             "question": user_question,
+#             "sparql_query": sparql_query,
+#             "results": formatted_results,
+#             "count": len(formatted_results)
+#         }
+
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+# def format_sparql_results(results):
+#     """
+#     Formate les résultats SPARQL en un format plus lisible
+#     """
+#     if "results" not in results or "bindings" not in results["results"]:
+#         return []
+
+#     formatted = []
+#     for binding in results["results"]["bindings"]:
+#         item = {}
+#         for key, value in binding.items():
+#             # Extraire le nom court après le # pour les URIs
+#             if value["type"] == "uri" and "#" in value["value"]:
+#                 item[key] = value["value"].split("#")[-1]
+#             else:
+#                 item[key] = value["value"]
+#         formatted.append(item)
     
-    return formatted
+#     return formatted
 
 def validate_sparql_query(query: str) -> bool:
     """Valide la syntaxe basique d'une requête SPARQL - VERSION CORRIGÉE"""
@@ -1299,6 +1530,22 @@ async def test_sparql_query(query_data: dict):
             "type": "ERROR",
             "success": False
         }
+# def validate_sparql_query(query: str) -> bool:
+#     """Valide la syntaxe basique d'une requête SPARQL"""
+#     if not query:
+#         return False
+    
+#     # Vérifier les mots-clés SPARQL essentiels
+#     essential_keywords = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE']
+#     if not any(keyword in query.upper() for keyword in essential_keywords):
+#         return False
+    
+#     # Vérifier la présence des accolades
+#     if '{' not in query or '}' not in query:
+#         return False
+    
+#     return True
+
 # ======================
 # 👤 PERSONNES - ENDPOINTS
 # ======================
@@ -2896,6 +3143,308 @@ def get_current_user(token: str):
 def home():
     return {"message": "🚀 Bienvenue dans l'API SmartCity Mobility RDF + Fuseki + Ollama"}
 
+
+###########################wala
+# Initialisation discrète
+sparql_gen = SPARQLGenerator()
+
+# Conversion RDF en texte (sans référence aux templates)
+def rdf_to_text():
+    txt = "Structure des données RDF :\n\n"
+    for s, p, o in g:
+        s_clean = str(s).split("#")[-1] if "#" in str(s) else str(s)
+        p_clean = str(p).split("#")[-1] if "#" in str(p) else str(p)
+        o_clean = str(o).split("#")[-1] if "#" in str(o) else str(o)
+        txt += f"{s_clean} → {p_clean} → {o_clean}\n"
+    return txt
+
+RDF_TEXT = rdf_to_text()
+
+# PROMPT PÉDAGOGIQUE AMÉLIORÉ
+PROMPT_TEMPLATE = """
+Tu es un expert SPARQL. Génère UNIQUEMENT la requête SPARQL pour cette question.
+
+ONTOLOGIE MOBILITÉ :
+- Préfixe : PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+- Classes principales : Personne, Conducteur, Avis, AvisPositif, AvisNegatif, Trajet, Ticket, Infrastructure
+- Propriétés principales : commentaire, note, dateAvis, scoreUtilite, categorieAvis, langueAvis, nom, prenom, age, email, distance, duree
+
+PRINCIPES FONDAMENTAUX :
+
+1. COMPRÉHENSION SÉMANTIQUE :
+   - "positif/positive" → classe AvisPositif
+   - "négatif/négative" → classe AvisNegatif  
+   - "avis" général → classe Avis
+   - "personne" → classe Personne
+   - "trajet" → classe Trajet
+
+2. SÉLECTION INTELLIGENTE :
+   - Utilise des noms de variables SIGNIFICATIFS : ?commentaire, ?note, ?dateAvis, etc.
+   - Ne JAMAIS utiliser ?var1, ?var2, ?var3
+   - Sélectionne TOUJOURS les propriétés pertinentes :
+     * Avis : ?commentaire ?note ?dateAvis ?scoreUtilite ?categorieAvis ?langueAvis
+     * Personne : ?nom ?prenom ?age ?email ?telephone
+     * Trajet : ?distance ?duree ?heureDepart ?heureArrivee
+
+3. SYNTAXE CORRECTE :
+   - Pattern : SELECT ?avis ?commentaire ?note WHERE {{ ?avis a mobilite:AvisPositif ; mobilite:commentaire ?commentaire ; mobilite:note ?note . }}
+   - "a" pour le type de classe
+   - ";" pour séparer les propriétés
+   - "." pour terminer
+
+QUESTION : "{user_question}"
+
+GÉNÈRE UNIQUEMENT LA REQUÊTE SPARQL COMPLÈTE AVEC DES VARIABLES SIGNIFICATIVES.
+"""
+
+def safe_format_prompt(question):
+    """Format sécurisé du prompt pour éviter les erreurs avec les accolades"""
+    return PROMPT_TEMPLATE.format(user_question=question.replace("{", "{{").replace("}", "}}"))
+
+def extract_sparql(text):
+    """Extrait la requête SPARQL du texte généré"""
+    if not text:
+        return None
+    
+    # Essayer d'abord le pattern complet
+    pattern = r'PREFIX.*?\}'
+    matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+    
+    if matches:
+        return matches[0].strip()
+    
+    # Si pas trouvé, chercher juste le bloc WHERE
+    where_pattern = r'SELECT.*?WHERE\s*\{.*?\}'
+    matches = re.findall(where_pattern, text, re.DOTALL | re.IGNORECASE)
+    
+    if matches:
+        sparql = matches[0].strip()
+        # Ajouter le préfixe manquant si nécessaire
+        if not sparql.startswith('PREFIX mobilite:'):
+            sparql = 'PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>\n' + sparql
+        return sparql
+    
+    return None
+
+def format_results(results):
+    """Formate les résultats de requête"""
+    formatted = []
+    for row in results:
+        row_dict = {}
+        for k, v in row.asdict().items():
+            if v:
+                if "#" in str(v):
+                    row_dict[k] = str(v).split("#")[-1]
+                else:
+                    row_dict[k] = str(v)
+            else:
+                row_dict[k] = None
+        formatted.append(row_dict)
+    return formatted
+
+def ensure_detailed_sparql(sparql_query, user_question):
+    """S'assure que la requête n'est pas trop basique - correction GÉNÉRIQUE uniquement"""
+    if not sparql_query:
+        return sparql_query
+    
+    sparql_lower = sparql_query.lower()
+    question_lower = user_question.lower()
+    
+    # Détecter si c'est une requête de comptage
+    is_count_query = "count(" in sparql_lower or any(word in question_lower for word in ["nombre", "combien", "compter"])
+    
+    if is_count_query:
+        return sparql_query  # Les comptages peuvent avoir une variable simple
+    
+    # CORRECTION : Remplacer les variables génériques par des noms significatifs
+    sparql_query = fix_generic_variables(sparql_query, question_lower)
+    
+    # Vérifier si la requête est trop basique (SELECT avec 1-2 variables max)
+    select_match = re.search(r'SELECT\s+(.*?)\s+WHERE', sparql_lower, re.DOTALL)
+    if select_match:
+        select_vars = re.findall(r'\?(\w+)', select_match.group(1))
+        
+        # Si requête trop simple, l'enrichir GÉNÉRIQUEMENT
+        if len(select_vars) <= 2:
+            return enhance_generic_query(sparql_query, question_lower)
+    
+    return sparql_query
+
+def fix_generic_variables(sparql, question_lower):
+    """Corrige les variables génériques (?var1, ?var2) par des noms significatifs"""
+    
+    # Détecter le type d'entité principal
+    if "avis" in question_lower:
+        # Remplacer les variables génériques pour les avis
+        replacements = {
+            r'\?var1': '?commentaire',
+            r'\?var2': '?note', 
+            r'\?var3': '?dateAvis',
+            r'\?var4': '?scoreUtilite',
+            r'\?var5': '?categorieAvis',
+            r'\?var6': '?langueAvis'
+        }
+    elif "personne" in question_lower or "utilisateur" in question_lower:
+        # Remplacer pour les personnes
+        replacements = {
+            r'\?var1': '?nom',
+            r'\?var2': '?prenom',
+            r'\?var3': '?age',
+            r'\?var4': '?email',
+            r'\?var5': '?telephone',
+            r'\?var6': '?dateInscription'
+        }
+    elif "trajet" in question_lower:
+        # Remplacer pour les trajets
+        replacements = {
+            r'\?var1': '?distance',
+            r'\?var2': '?duree',
+            r'\?var3': '?heureDepart',
+            r'\?var4': '?heureArrivee',
+            r'\?var5': '?vitesseMoyenne',
+            r'\?var6': '?scoreOptimisation'
+        }
+    else:
+        return sparql
+    
+    # Appliquer les remplacements
+    for generic, meaningful in replacements.items():
+        sparql = re.sub(generic, meaningful, sparql, flags=re.IGNORECASE)
+    
+    return sparql
+
+def enhance_generic_query(sparql, question_lower):
+    """Enrichissement GÉNÉRIQUE sans logique prédéfinie"""
+    
+    # CORRECTIONS SYSTAXIQUES UNIQUEMENT
+    sparql = re.sub(r'\?(\w+)\s+mobilite:donneAvis', r'?\1 a', sparql)
+    
+    # Si la requête a un pattern basique ?var WHERE { ?var a mobilite:Classe }
+    basic_pattern = re.search(r'SELECT\s+(\?\w+)\s+WHERE\s*\{\s*\1\s+a\s+(mobilite:\w+)', sparql, re.IGNORECASE)
+    
+    if basic_pattern:
+        var_name = basic_pattern.group(1)
+        class_name = basic_pattern.group(2)
+        
+        # Enrichissement basé sur la classe - GÉNÉRIQUE
+        if "avis" in class_name.lower():
+            new_select = f"SELECT {var_name} ?commentaire ?note ?dateAvis ?scoreUtilite ?categorieAvis ?langueAvis"
+            new_where = f"{var_name} a {class_name} ; mobilite:commentaire ?commentaire ; mobilite:note ?note ; mobilite:dateAvis ?dateAvis ; mobilite:scoreUtilite ?scoreUtilite ; mobilite:categorieAvis ?categorieAvis ; mobilite:langueAvis ?langueAvis"
+            
+        elif "personne" in class_name.lower():
+            new_select = f"SELECT {var_name} ?nom ?prenom ?age ?email ?telephone ?dateInscription"
+            new_where = f"{var_name} a {class_name} ; mobilite:nom ?nom ; mobilite:prenom ?prenom ; mobilite:age ?age ; mobilite:email ?email ; mobilite:telephone ?telephone ; mobilite:dateInscription ?dateInscription"
+            
+        elif "trajet" in class_name.lower():
+            new_select = f"SELECT {var_name} ?distance ?duree ?heureDepart ?heureArrivee ?vitesseMoyenne"
+            new_where = f"{var_name} a {class_name} ; mobilite:distance ?distance ; mobilite:duree ?duree ; mobilite:heureDepart ?heureDepart ; mobilite:heureArrivee ?heureArrivee ; mobilite:vitesseMoyenne ?vitesseMoyenne"
+            
+        else:
+            # Pour les autres classes, ne pas modifier
+            return sparql
+        
+        sparql = sparql.replace(f"SELECT {var_name}", new_select)
+        sparql = re.sub(rf'\{{\s*{var_name}\s+a\s+{class_name}\s*', f'{{ {new_where} ', sparql)
+    
+    return sparql
+
+
+
+@app.post("/ask/")  # Changé de GET à POST et ajouté le slash
+async def ask(question_data: dict):
+    """Endpoint principal pour les questions avec POST"""
+    try:
+        user_question = question_data.get("question", "").strip()
+        if not user_question:
+            raise HTTPException(status_code=400, detail="La question est requise")
+        
+        print(f"🧠 Question reçue: {user_question}")
+
+        # Vérifier d'abord si la question correspond à un template prédéfini
+        if sparql_gen.is_predefined_query(user_question):
+            result = sparql_gen.generate_sparql(user_question)
+            if isinstance(result, tuple) and len(result) == 2:
+                sparql, source = result
+            else:
+                sparql = result
+                source = "template"
+        else:
+            # Utiliser l'IA
+            source = "ia"
+            prompt = safe_format_prompt(user_question)
+            try:
+                raw_response = ollama.generate(
+                    model="codellama:7b", 
+                    prompt=prompt, 
+                    options={"temperature": 0.1}
+                )["response"]
+                sparql = extract_sparql(raw_response)
+                
+                if sparql:
+                    sparql = ensure_detailed_sparql(sparql, user_question)
+                    
+            except Exception as e:
+                return {"error": f"Erreur avec l'IA: {str(e)}", "question": user_question}
+        
+        if not sparql:
+            return {"error": "Requête SPARQL non générée", "question": user_question}
+        
+        try:
+            results = list(g.query(sparql))
+            formatted_results = format_results(results)
+            
+            return {
+                "question": user_question,
+                "sparql_query": sparql,  # Changé de 'sparql' à 'sparql_query'
+                "results": formatted_results,
+                "count": len(results),
+                "source": source
+            }
+            
+        except Exception as e:
+            return {"error": f"Erreur d'exécution: {str(e)}", "sparql_query": sparql}
+            
+    except Exception as e:
+        return {"error": f"Erreur générale: {str(e)}", "question": user_question}
+    
+@app.get("/check-query")
+async def check_query(q: str = Query(...)):
+    """Endpoint pour vérifier si une requête est prédéfinie"""
+    is_predefined = sparql_gen.is_predefined_query(q)
+    query_type = sparql_gen.detect_query_type(q)
+    user = sparql_gen.extract_user_name(q)
+    
+    return {
+        "question": q,
+        "is_predefined": is_predefined,
+        "query_type": query_type,
+        "detected_user": user,
+        "suggested_questions": sparql_gen.get_suggested_questions() if not is_predefined else None
+    }
+
+@app.get("/examples")
+async def get_examples():
+    """Endpoint pour les exemples (sans révéler la logique)"""
+    return {
+        "example_questions": [
+            "Quel est le trajet de Wala?",
+            "Donne les informations sur Oumaima", 
+            "Liste les tickets étudiants disponibles",
+            "Quels tickets possède Wala?",
+            "Affiche les avis de Oumaima"
+        ],
+        "predefined_queries_count": len(QUERY_PATTERNS),
+        "known_users": sparql_gen.known_users
+    }
+
+@app.get("/health")
+async def health_check():
+    """Endpoint de santé"""
+    return {"status": "active", "triplets": len(g)}
+
+
+
+###########################
 # ======================
 # 🚀 LANCEMENT DE L'APPLICATION
 # ======================

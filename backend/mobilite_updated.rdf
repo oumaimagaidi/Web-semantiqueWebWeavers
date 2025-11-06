@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <rdf:RDF
-   xmlns="http://www.semanticweb.org/smartcity/ontologies/mobilite#"
+   xmlns:j.0="http://www.semanticweb.org/smartcity/ontologies/mobilite#"
    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
 >
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisBusOumaima">
     <scoreUtilite>7</scoreUtilite>
@@ -1058,5 +1057,185 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#heureOuverture">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#123">
+    <j.0:donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis_001"/>
+    <j.0:donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#ksdfgh"/>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
+    <j.0:email>tahertouzri@gmail.com</j.0:email>
+    <j.0:prenom>taher</j.0:prenom>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">25</j.0:age>
+    <j.0:nom>touzri</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#user_1">
+    <j.0:donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis_001"/>
+    <j.0:donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis_05"/>
+    <j.0:languePreferee>Français</j.0:languePreferee>
+    <j.0:languePreferee rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Français</j.0:languePreferee>
+    <j.0:preferencesAccessibilite>Aucune</j.0:preferencesAccessibilite>
+    <j.0:preferencesAccessibilite rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Aucune</j.0:preferencesAccessibilite>
+    <j.0:telephone>+21652352644</j.0:telephone>
+    <j.0:telephone rdf:datatype="http://www.w3.org/2001/XMLSchema#string">+21652352644</j.0:telephone>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
+    <j.0:email>mariem.touzri@esprit.tn</j.0:email>
+    <j.0:email>mariem@gmail.com</j.0:email>
+    <j.0:email>zekri@gmail.com</j.0:email>
+    <j.0:email rdf:datatype="http://www.w3.org/2001/XMLSchema#string">admin@smartcity.com</j.0:email>
+    <j.0:prenom>mariem</j.0:prenom>
+    <j.0:prenom>zekri</j.0:prenom>
+    <j.0:prenom rdf:datatype="http://www.w3.org/2001/XMLSchema#string">admin</j.0:prenom>
+    <j.0:niveauAbonnement>Standard</j.0:niveauAbonnement>
+    <j.0:niveauAbonnement rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Standard</j.0:niveauAbonnement>
+    <j.0:scoreFidelite rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">0</j.0:scoreFidelite>
+    <j.0:genre>Masculin</j.0:genre>
+    <j.0:genre>Féminin</j.0:genre>
+    <j.0:genre rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Masculin</j.0:genre>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">26</j.0:age>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">25</j.0:age>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">30</j.0:age>
+    <j.0:nom>touzri</j.0:nom>
+    <j.0:nom>ammar</j.0:nom>
+    <j.0:nom rdf:datatype="http://www.w3.org/2001/XMLSchema#string">admin</j.0:nom>
+    <j.0:dateInscription>2025-11-06T18:27:42.016980</j.0:dateInscription>
+    <j.0:dateInscription>2025-11-05T17:30:02.114840</j.0:dateInscription>
+    <j.0:dateInscription>2025-11-06T17:40:18.554715</j.0:dateInscription>
+    <j.0:dateInscription rdf:datatype="http://www.w3.org/2001/XMLSchema#string">2025-11-06T18:50:38.215567</j.0:dateInscription>
+    <j.0:statutCompte>Actif</j.0:statutCompte>
+    <j.0:statutCompte rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Actif</j.0:statutCompte>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#user_2">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
+    <j.0:nom rdf:datatype="http://www.w3.org/2001/XMLSchema#string"></j.0:nom>
+    <j.0:prenom rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wala</j.0:prenom>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">25</j.0:age>
+    <j.0:email rdf:datatype="http://www.w3.org/2001/XMLSchema#string">wala.ammar@esprit.tn</j.0:email>
+    <j.0:telephone rdf:datatype="http://www.w3.org/2001/XMLSchema#string">+21652352644</j.0:telephone>
+    <j.0:dateInscription rdf:datatype="http://www.w3.org/2001/XMLSchema#string">2025-11-06T18:53:46.249581</j.0:dateInscription>
+    <j.0:statutCompte rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Actif</j.0:statutCompte>
+    <j.0:niveauAbonnement rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Standard</j.0:niveauAbonnement>
+    <j.0:scoreFidelite rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">0</j.0:scoreFidelite>
+    <j.0:preferencesAccessibilite rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Aucune</j.0:preferencesAccessibilite>
+    <j.0:genre rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Féminin</j.0:genre>
+    <j.0:languePreferee rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Français</j.0:languePreferee>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#sdfghj">
+    <j.0:commentaire>sdfghjkl</j.0:commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Parking"/>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
+    <j.0:adresse>xcvbjkl</j.0:adresse>
+    <j.0:nom>dfghjk</j.0:nom>
+    <j.0:note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</j.0:note>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#infra_001">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
+    <j.0:adresse>lkjhgfd</j.0:adresse>
+    <j.0:adresse>mlkjh</j.0:adresse>
+    <j.0:nom>lmskjd</j.0:nom>
+    <j.0:nom>lkjhgf</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#INFRA_002">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
+    <j.0:adresse>xhjklm</j.0:adresse>
+    <j.0:nom>dfghjkl</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#station_001">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
+    <j.0:puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</j.0:puissanceMax>
+    <j.0:disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</j.0:disponible>
+    <j.0:typeConnecteur>Type2</j.0:typeConnecteur>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#STATION_DEMO_002">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
+    <j.0:puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">50.0</j.0:puissanceMax>
+    <j.0:disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</j.0:disponible>
+    <j.0:typeConnecteur>CCS</j.0:typeConnecteur>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#id_1">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Voiture"/>
+    <j.0:marque>mazda</j.0:marque>
+    <j.0:immatriculation>mazda123</j.0:immatriculation>
+    <j.0:modele>120</j.0:modele>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#STATION_DEMO_001">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
+    <j.0:puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</j.0:puissanceMax>
+    <j.0:disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</j.0:disponible>
+    <j.0:typeConnecteur>Type2</j.0:typeConnecteur>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis_001">
+    <j.0:commentaire>kjdtrwfgh</j.0:commentaire>
+    <j.0:commentaire>j'aime bien </j.0:commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
+    <j.0:note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</j.0:note>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#vehicle_01">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Voiture"/>
+    <j.0:marque>mazda</j.0:marque>
+    <j.0:immatriculation>123tu2001</j.0:immatriculation>
+    <j.0:modele>208mazda</j.0:modele>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#event_01">
+    <j.0:commentaire>dsfgh</j.0:commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Trajeturgent"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#event_0006">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Trajeturgent"/>
+    <j.0:commentaire rdf:datatype="http://www.w3.org/2001/XMLSchema#string">qsdfghjklm</j.0:commentaire>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#station_lj">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
+    <j.0:puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</j.0:puissanceMax>
+    <j.0:disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</j.0:disponible>
+    <j.0:typeConnecteur>Type2</j.0:typeConnecteur>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#user_123">
+    <j.0:donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#sdfghj"/>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
+    <j.0:email>akrem@gmail.com</j.0:email>
+    <j.0:prenom>akrem</j.0:prenom>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">24</j.0:age>
+    <j.0:nom>jilani</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#trajet_001">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Trajet"/>
+    <j.0:heureArrivee>21:01</j.0:heureArrivee>
+    <j.0:heureDepart>18:03</j.0:heureDepart>
+    <j.0:duree rdf:datatype="http://www.w3.org/2001/XMLSchema#float">30.0</j.0:duree>
+    <j.0:distance rdf:datatype="http://www.w3.org/2001/XMLSchema#float">15.5</j.0:distance>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#lkjhg">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
+    <j.0:adresse>lkjhg</j.0:adresse>
+    <j.0:nom>klkjhg</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#station_002">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
+    <j.0:puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">25.0</j.0:puissanceMax>
+    <j.0:disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</j.0:disponible>
+    <j.0:typeConnecteur>CCS</j.0:typeConnecteur>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis_05">
+    <j.0:commentaire>wooow</j.0:commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
+    <j.0:note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</j.0:note>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#ksdfgh">
+    <j.0:commentaire>ssdfgfhj</j.0:commentaire>
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
+    <j.0:note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">4</j.0:note>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#12">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Conducteur"/>
+    <j.0:email>mohamed@gmail.com</j.0:email>
+    <j.0:prenom>taher</j.0:prenom>
+    <j.0:age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">30</j.0:age>
+    <j.0:nom>touzri</j.0:nom>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#voyageur_001">
+    <j.0:possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#ticket_001"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#infra">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
+    <j.0:adresse>sdfghjk</j.0:adresse>
+    <j.0:nom>sdfb</j.0:nom>
   </rdf:Description>
 </rdf:RDF>
