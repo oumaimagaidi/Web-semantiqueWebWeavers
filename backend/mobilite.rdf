@@ -289,6 +289,11 @@
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#habiteA">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
   </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#05">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
+    <adresse>test</adresse>
+    <nom>test</nom>
+  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#Velo">
     <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#MobiliteDouce"/>
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
@@ -681,6 +686,7 @@
     <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Voyageur"/>
     <email>mariem@esprit.tn</email>
     <prenom>ouali</prenom>
+    <possedeTicket rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#003"/>
     <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">26</age>
     <nom>mariem</nom>
   </rdf:Description>

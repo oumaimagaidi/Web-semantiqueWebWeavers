@@ -80,18 +80,7 @@ export default function Home() {
       <div style={styles.content}>
         
         {/* En-tête holographique */}
-        <header style={styles.header}>
-          <div style={styles.logo}>
-            <div style={styles.logoOrb}>
-              <div style={styles.orbGlow}></div>
-              <span style={styles.logoIcon}>⚡</span>
-            </div>
-            <div style={styles.logoTextContainer}>
-              <span style={styles.logoText}>SMARTCITY</span>
-              <span style={styles.logoSubtext}>URBAN INTELLIGENCE NETWORK</span>
-            </div>
-          </div>
-        </header>
+       
 
         {/* Section principale */}
         <main style={styles.main}>

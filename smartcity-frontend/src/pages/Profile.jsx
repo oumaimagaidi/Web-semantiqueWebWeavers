@@ -225,14 +225,7 @@ export default function Profile() {
               <span style={styles.titleSub}>Gestion de votre identité numérique</span>
             </h1>
           </div>
-          <div style={styles.headerRight}>
-            <button 
-              style={styles.backButton}
-              onClick={() => navigate("/app")}
-            >
-              ← RETOUR
-            </button>
-          </div>
+         
         </header>
 
         {/* Alertes */}
