@@ -62,12 +62,6 @@
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#sourceDonnees">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#recharge1">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
-    <puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</puissanceMax>
-    <disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</disponible>
-    <typeConnecteur>Type2</typeConnecteur>
-  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#nombreSignalements">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
@@ -224,11 +218,6 @@
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#dateInscription">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#event2">
-    <commentaire>testt</commentaire>
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Trajeturgent"/>
-    <concerneInfrastructure rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AppartementWala"/>
-  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#genre">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
@@ -244,7 +233,6 @@
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#NamedIndividual"/>
     <appartientA rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#SmartCityTunis"/>
     <anneeFabrication>2022</anneeFabrication>
-    <utiliseStationRecharge rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#recharge1"/>
     <marque>Mercedes</marque>
     <immatriculation>BUS2801</immatriculation>
     <couleur>Bleu</couleur>
@@ -294,15 +282,6 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#adresse">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#test">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Route"/>
-    <puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</puissanceMax>
-    <adresse>test</adresse>
-    <disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</disponible>
-    <nom>test</nom>
-    <typeConnecteur>Type2</typeConnecteur>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#vitesseMaximale">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
@@ -491,12 +470,6 @@
     <prix>5.0</prix>
     <numeroTicket>PARK20240115892</numeroTicket>
   </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#STATION_DEMO_002">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
-    <puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">50.0</puissanceMax>
-    <disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</disponible>
-    <typeConnecteur>CCS</typeConnecteur>
-  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#niveauService">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
@@ -509,12 +482,6 @@
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#valablePour">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
   </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#STATION_DEMO_001">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
-    <puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</puissanceMax>
-    <disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</disponible>
-    <typeConnecteur>Type2</typeConnecteur>
-  </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#periodeMesure">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
   </rdf:Description>
@@ -523,11 +490,6 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#numeroTicket">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis">
-    <commentaire>bravo bon continuation</commentaire>
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvisPositif"/>
-    <note rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</note>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#categoriePermis">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
@@ -543,6 +505,11 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#statutTicket">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#INFRA01">
+    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Parking"/>
+    <adresse>Urbain</adresse>
+    <nom>EX</nom>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#AvenueMohamedV">
     <capaciteAccueil>2 voies</capaciteAccueil>
@@ -624,13 +591,6 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#Avis">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#24">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Bus"/>
-    <utiliseStationRecharge rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#test"/>
-    <marque>marque</marque>
-    <immatriculation>2569874</immatriculation>
-    <modele>peogeo</modele>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#Conducteur">
     <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
@@ -719,12 +679,6 @@
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique">
     <rdfs:subClassOf rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#StationRecharge"/>
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Class"/>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#station">
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#RechargeElectrique"/>
-    <puissanceMax rdf:datatype="http://www.w3.org/2001/XMLSchema#float">22.0</puissanceMax>
-    <disponible rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">true</disponible>
-    <typeConnecteur>CHAdeMO</typeConnecteur>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#nombreArrets">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#DatatypeProperty"/>
@@ -937,40 +891,18 @@
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#user_1">
-    <donneAvis rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#avis"/>
     <languePreferee>Français</languePreferee>
     <preferencesAccessibilite>Aucune</preferencesAccessibilite>
-    <telephone>51685965</telephone>
-    <telephone>51865355</telephone>
+    <telephone>52601504</telephone>
     <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
-    <email>emna.ouerhemmi@isimg.tn</email>
-    <email>emna.ouerhemmii@isimg.tn</email>
-    <prenom>ouerghemmi</prenom>
-    <prenom>emna</prenom>
-    <niveauAbonnement>Standard</niveauAbonnement>
+    <email>oumaima.gaidi@esprit.tn</email>
+    <prenom>oumaima</prenom>
+    <niveauAbonnement>Premium</niveauAbonnement>
     <scoreFidelite rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">0</scoreFidelite>
     <genre>Féminin</genre>
     <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">25</age>
-    <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">24</age>
-    <nom>ouerghemmi</nom>
-    <nom>yosra</nom>
-    <dateInscription>2025-11-05T12:59:59.944507</dateInscription>
-    <dateInscription>2025-11-05T15:07:34.537604</dateInscription>
-    <statutCompte>Actif</statutCompte>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#user_2">
-    <languePreferee>Français</languePreferee>
-    <preferencesAccessibilite>Aucune</preferencesAccessibilite>
-    <telephone>51865355</telephone>
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Personne"/>
-    <email>emna.ouerghemmi@esprit.tn</email>
-    <prenom>emna</prenom>
-    <niveauAbonnement>Standard</niveauAbonnement>
-    <scoreFidelite rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">0</scoreFidelite>
-    <genre>Féminin</genre>
-    <age rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">24</age>
-    <nom>ouerghemmi</nom>
-    <dateInscription>2025-11-05T15:13:57.673607</dateInscription>
+    <nom>gaidi</nom>
+    <dateInscription>2025-11-06T14:21:40.729803</dateInscription>
     <statutCompte>Actif</statutCompte>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#capaciteAccueil">
@@ -1001,11 +933,6 @@
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#estConnecteA">
     <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#ObjectProperty"/>
-  </rdf:Description>
-  <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#event">
-    <commentaire>test</commentaire>
-    <rdf:type rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#Trajetoptimal"/>
-    <concerneInfrastructure rdf:resource="http://www.semanticweb.org/smartcity/ontologies/mobilite#AutorouteA1"/>
   </rdf:Description>
   <rdf:Description rdf:about="http://www.semanticweb.org/smartcity/ontologies/mobilite#SiegeSocial">
     <capaciteAccueil>800</capaciteAccueil>
