@@ -27,7 +27,7 @@ export default function SmartCitiesPage() {
   const fetchCities = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://127.0.0.1:8000/smartcities/");
+      const res = await axios.get("http://localhost:8000/smartcities/");
       setCities(res.data);
     } catch (err) {
       console.error(err);

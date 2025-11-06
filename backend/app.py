@@ -3,6 +3,10 @@ import datetime
 from typing import Any
 import re
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
+# main.py
+import datetime
+from typing import Any
+import re
 from pydantic import BaseModel
 from rdflib import Graph, Namespace, Literal, URIRef
 from rdflib.namespace import RDF, RDFS, XSD
@@ -36,7 +40,8 @@ load_dotenv()
 
 # Configuration Ollama
 OLLAMA_BASE_URL = "http://localhost:11434"
-# OLLAMA_MODEL = "llama3:8b"
+OLLAMA_MODEL = "codellama:7b"
+
 
 FUSEKI_BASE = "http://localhost:3030"
 FUSEKI_QUERY_URL = f"{FUSEKI_BASE}/smartcity/sparql"
@@ -145,53 +150,87 @@ def debug_fuseki():
         }
     except Exception as e:
         return {"status": "❌ Fuseki non accessible", "error": str(e)}
+
+
 def send_to_fuseki(update_query: str):
-    """Envoie une requête SPARQL UPDATE à Fuseki avec vérification"""
-    sparql = SPARQLWrapper(FUSEKI_UPDATE_URL)
-    sparql.setMethod(POST)
-    sparql.setQuery(update_query)
+    """
+    Envoie une requête SPARQL UPDATE à Fuseki en utilisant requests directement
+    pour une gestion robuste des erreurs HTTP et affichage des détails de Fuseki.
+    """
+    url = FUSEKI_UPDATE_URL
+    headers = {
+        "Content-Type": "application/sparql-update",
+        "Accept": "text/plain" # CHANGEMENT: Demande une réponse textuelle pour des messages d'erreur plus clairs de Fuseki
+    }
+    
     try:
-        print(f"🚀 Envoi de la requête UPDATE à Fuseki...")
-        result = sparql.query()
-        print(f"✅ Requête UPDATE exécutée avec succès")
+        print(f"🚀 Envoi de la requête UPDATE à Fuseki via requests...")
+        print(f"URL: {url}")
+        print(f"Headers: {headers}")
+        print(f"Requête:\n{update_query}")
+
+        response = requests.post(url, data=update_query.encode('utf-8'), headers=headers, timeout=30)
         
-        # Vérifier que les données sont bien ajoutées
-        if "INSERT" in update_query.upper():
-            # Attendre un peu pour que Fuseki traite la requête
-            import time
-            time.sleep(0.5)
-            
-            # Vérifier avec une requête COUNT
-            check_query = """
-            PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
-            SELECT (COUNT(*) as ?count) WHERE {
-                ?s ?p ?o
-            }
-            """
-            sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
-            sparql_check.setReturnFormat(JSON)
-            sparql_check.setQuery(check_query)
-            check_result = sparql_check.query().convert()
-            print(f"📊 Nombre total de triples dans Fuseki : {check_result['results']['bindings'][0]['count']['value']}")
+        # --- DEBUG CRITIQUE : Afficher la réponse brute de Fuseki ---
+        print(f"DEBUG_FUSEKI_RESPONSE: Statut HTTP de Fuseki: {response.status_code}")
+        print(f"DEBUG_FUSEKI_RESPONSE: Corps de la réponse de Fuseki:\n{response.text}")
+        # -----------------------------------------------------------
+
+        # Vérifier si la requête a réussi (code 2xx) ou si Fuseki a renvoyé une erreur
+        if response.status_code >= 400: # Si Fuseki renvoie une erreur (4xx ou 5xx)
+            error_detail_from_fuseki = response.text
+            print(f"❌ Fuseki a renvoyé un code d'erreur HTTP: {response.status_code}")
+            print(f"   Message d'erreur de Fuseki: {error_detail_from_fuseki}")
+            raise HTTPException(
+                status_code=response.status_code, # Remonte le statut d'erreur de Fuseki
+                detail=f"Échec de l'opération d'écriture sur Fuseki. Statut: {response.status_code}. Message de Fuseki: {error_detail_from_fuseki}"
+            )
         
-        return True
+        print(f"✅ Requête UPDATE exécutée avec succès. Statut: {response.status_code}")
+        
+        return True 
+        
+    except requests.exceptions.ConnectionError as conn_err:
+        print(f"❌ Erreur de connexion à Fuseki: {conn_err}")
+        raise HTTPException(
+            status_code=503, # Service Unavailable
+            detail=f"Impossible de se connecter au serveur Fuseki. Vérifiez qu'il est démarré et accessible à {FUSEKI_BASE}. Erreur: {conn_err}"
+        )
+    except requests.exceptions.Timeout as timeout_err:
+        print(f"❌ Délai d'attente dépassé lors de l'envoi à Fuseki: {timeout_err}")
+        raise HTTPException(
+            status_code=504, # Gateway Timeout
+            detail=f"Délai d'attente dépassé lors de l'envoi de la requête à Fuseki. Erreur: {timeout_err}"
+        )
     except Exception as e:
-        print(f"❌ Erreur détaillée lors de l'envoi à Fuseki: {e}")
+        print(f"❌ Erreur inattendue lors de l'envoi de l'UPDATE à Fuseki: {e}")
         print(f"📝 Requête problématique: {update_query}")
-        return False
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur interne inattendue lors de l'opération d'écriture sur Fuseki: {str(e)}"
+        )
+
+
+
+
 def execute_sparql_query(query: str):
-    """Exécute une requête SPARQL SELECT et retourne les résultats"""
+    """Exécute une requête SPARQL SELECT et retourne les résultats - VERSION AMÉLIORÉE"""
     sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
     sparql.setReturnFormat(JSON)
     sparql.setQuery(query)
+    
     try:
         print(f"🔍 Exécution de la requête SPARQL...")
+        print(f"📝 Requête:\n{query}")
         results = sparql.query().convert()
         print(f"✅ Requête exécutée avec succès")
         return results
     except Exception as e:
         print(f"❌ Erreur SPARQL détaillée: {str(e)}")
+        
+        # Afficher plus de détails sur l'erreur
         try:
+            # Tester la connexion Fuseki
             sparql.setReturnFormat(JSON)
             sparql.setQuery("SELECT * WHERE { ?s ?p ?o } LIMIT 1")
             test_result = sparql.query().convert()
@@ -199,7 +238,8 @@ def execute_sparql_query(query: str):
         except Exception as conn_error:
             print(f"❌ Problème de connexion Fuseki: {conn_error}")
         
-        raise Exception(f"Erreur SPARQL: {str(e)}")
+        # Relancer l'exception avec plus de contexte
+        raise Exception(f"Erreur SPARQL: {str(e)} - Requête: {query[:200]}...")
 
 def push_data_to_graph(turtle_data: bytes, graph_uri: str):
     """Pousse du TTL vers l'endpoint /data de Fuseki"""
@@ -209,61 +249,145 @@ def push_data_to_graph(turtle_data: bytes, graph_uri: str):
     r.raise_for_status()
     return r
 
+
+import re
+
+# REMPLACEZ VOTRE FONCTION clean_sparql_query EXISTANTE PAR CELLE-CI
 def clean_sparql_query(query: str) -> str:
-    """Nettoie la requête SPARQL générée par l'IA pour être compatible avec Fuseki."""
+    """
+    Nettoie la requête SPARQL générée par l'IA pour être compatible avec Fuseki.
+    Cette version gère les préfixes de manière robuste pour éviter les doublons
+    et n'ajoute que les préfixes réellement nécessaires.
+    Elle inclut également une correction spécifique pour les types de données XSD.
+    """
+    global MOBILITE, RDF, RDFS, XSD 
+
     query = query.strip()
+    print(f"DEBUG_CLEAN: Entrée raw query (début):\n{query[:500]}...")
 
-    # Supprimer tout le texte avant la première requête SPARQL
-    lines = query.split('\n')
-    sparql_lines = []
-    in_sparql = False
+    # --- ÉTAPE 1: Extraire le corps de la requête SPARQL (sans préfixes ni commentaires d'Ollama) ---
+    extracted_sparql_body_raw = ""
+    code_block_match_sparql = re.search(r"```sparql\s*(.*?)\s*```", query, re.IGNORECASE | re.DOTALL)
     
-    for line in lines:
-        if any(keyword in line.upper() for keyword in ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'INSERT', 'DELETE', 'CREATE', 'DROP']):
-            in_sparql = True
-        
-        if in_sparql:
-            sparql_lines.append(line)
+    if code_block_match_sparql:
+        extracted_sparql_body_raw = code_block_match_sparql.group(1).strip()
+        print("DEBUG_CLEAN: [SUCCESS] Extrait du bloc Markdown (```sparql).")
+    else:
+        code_block_match_simple = re.search(r"```\s*(.*?)\s*```", query, re.IGNORECASE | re.DOTALL)
+        if code_block_match_simple:
+            extracted_sparql_body_raw = code_block_match_simple.group(1).strip()
+            print("DEBUG_CLEAN: [SUCCESS] Extrait du bloc Markdown (``` simple).")
+        else:
+            print("DEBUG_CLEAN: [FALLBACK] Bloc Markdown non trouvé. Tentative d'extraction heuristique.")
+            
+            # Supprimer le texte introductif et explicatif d'Ollama
+            temp_query = re.sub(r"^(?:La requête SPARQL pour (?:récupérer|ajouter|créer).*est la suivante :|La requête SPARQL.*est :|Notez que.*|Note:.*|SPARQL:?|```sparql|```)\s*", "", query, flags=re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            
+            # Chercher la fin structurelle d'une requête SPARQL (dernière accolade ou point)
+            last_brace_index = temp_query.rfind('}')
+            last_dot_index_after_brace = temp_query.rfind('.', last_brace_index if last_brace_index != -1 else 0)
+
+            effective_end_index = -1
+            if last_brace_index != -1:
+                effective_end_index = last_brace_index + 1
+            elif last_dot_index_after_brace != -1: 
+                effective_end_index = last_dot_index_after_brace + 1
+
+            if effective_end_index != -1:
+                potential_sparql_part = temp_query[:effective_end_index].strip()
+                trailing_text = temp_query[effective_end_index:].strip()
+                
+                if re.search(r"(?:Cette requête|La clause `OPTIONAL`|La requête peut être exécutée|Elle utilise également|Notez que)", trailing_text, re.IGNORECASE | re.DOTALL):
+                    extracted_sparql_body_raw = potential_sparql_part
+                    print(f"DEBUG_CLEAN: Texte de fin explicatif supprimé après le marqueur structurel.")
+                else:
+                    extracted_sparql_body_raw = temp_query.strip()
+                    print("DEBUG_CLEAN: Pas de commentaire explicatif identifié, garde la fin complète.")
+            else:
+                extracted_sparql_body_raw = temp_query.strip()
+                print("DEBUG_CLEAN: Pas de marqueur structural de fin, garde le texte tel quel après nettoyage du début.")
+
+    # Filtrer toutes les lignes qui sont des déclarations PREFIX du corps extrait
+    # et retirer les éventuels backticks résiduels
+    clean_sparql_body_lines = []
+    for line in extracted_sparql_body_raw.splitlines():
+        if not re.match(r"PREFIX\s+\w+:\s*<[^>]+>", line, re.IGNORECASE):
+            clean_sparql_body_lines.append(line)
     
-    if sparql_lines:
-        query = '\n'.join(sparql_lines)
+    clean_sparql_body = "\n".join(clean_sparql_body_lines).strip()
+    clean_sparql_body = re.sub(r"```[a-zA-Z]*", "", clean_sparql_body)
+    clean_sparql_body = clean_sparql_body.replace("```", "").strip()
+    clean_sparql_body = clean_sparql_body.replace("\\n", "\n")
 
-    # Supprimer les balises Markdown
-    query = re.sub(r"```[a-zA-Z]*", "", query)
-    query = query.replace("```", "").strip()
-    query = query.replace("\\n", "\n")
-    query = query.replace("mobilitemobilite:", "mobilite:")
+    print(f"DEBUG_CLEAN: Requête après extraction initiale/heuristique (début):\n{clean_sparql_body[:500]}...")
 
-    # Supprimer les notes et commentaires textuels
-    query = re.sub(r"Notez que.*$", "", query, flags=re.IGNORECASE | re.MULTILINE)
-    query = re.sub(r"Note:.*$", "", query, flags=re.IGNORECASE | re.MULTILINE)
-    query = re.sub(r"La requête SPARQL.*est :", "", query, flags=re.IGNORECASE)
-    query = re.sub(r"SPARQL:?", "", query, flags=re.IGNORECASE)
+    # --- ÉTAPE 2: Gérer les préfixes de manière robuste ---
+    
+    # Définir les préfixes canoniques
+    canonical_prefixes_map = {
+        "mobilite": str(MOBILITE),
+        "xsd": str(XSD),
+        "rdfs": str(RDFS),
+        "rdf": str(RDF),
+    }
+    
+    # Identifier quels préfixes canoniques sont réellement nécessaires en se basant sur le corps nettoyé
+    needed_prefixes = {}
 
-    # Corriger le préfixe mal formé
-    query = re.sub(r"PREFIX\s*:\s*<[^>]+>", f"PREFIX mobilite: <{MOBILITE}>", query)
-    query = re.sub(r"PREFIX\s+mobilite:\s*<http://example\.org/?.*?>", f"PREFIX mobilite: <{MOBILITE}>", query)
+    # Toujours inclure mobilite, car c'est le namespace de l'ontologie
+    needed_prefixes["mobilite"] = canonical_prefixes_map["mobilite"]
 
-    # Si aucun PREFIX mobilite, on l'ajoute
-    if "PREFIX mobilite:" not in query:
-        query = f"PREFIX mobilite: <{MOBILITE}>\n" + query
+    # Vérifier les autres préfixes standards en fonction de leur utilisation dans le corps
+    if "xsd:" in clean_sparql_body:
+        needed_prefixes["xsd"] = canonical_prefixes_map["xsd"]
+    
+    # RDFS est nécessaire si "rdfs:" ou "rdfs:subClassOf" est explicitement mentionné
+    if "rdfs:" in clean_sparql_body: # Inclut rdfs:subClassOf
+        needed_prefixes["rdfs"] = canonical_prefixes_map["rdfs"]
+    
+    # RDF est nécessaire si "rdf:type" ou l'abréviation "a" est utilisée
+    if "rdf:" in clean_sparql_body or re.search(r"\s+a\s+\?", clean_sparql_body) or re.search(r"\s+a\s+mobilite:", clean_sparql_body):
+        needed_prefixes["rdf"] = canonical_prefixes_map["rdf"]
+    
+    # Construire le bloc de préfixes final
+    prefix_block_lines = []
+    for p_name in sorted(needed_prefixes.keys()):
+        prefix_block_lines.append(f"PREFIX {p_name}: <{needed_prefixes[p_name]}>")
+    
+    final_prefix_block = "\n".join(prefix_block_lines)
+    
+    # --- ÉTAPE 3: Post-traitement sur le corps de la requête SPARQL ---
+    
+    # Corrige les instances malformées comme mobilitemobilite:
+    clean_sparql_body = re.sub(r"mobilitemobilite:", "mobilite:", clean_sparql_body) 
+    
+    # Corriger les notations sans préfixe (ex: :AvisSimple001 -> mobilite:AvisSimple001)
+    # S'assure de ne pas affecter les URIs complètes ou les littéraux.
+    clean_sparql_body = re.sub(r"(?<![\w/:])(?<!http:)(?<!https:):(\w+)", r"mobilite:\1", clean_sparql_body)
 
-    # Corriger les notations sans préfixe
-    query = re.sub(r"(?<!\w):(\w+)", r"mobilite:\1", query)
+    # NOUVELLE ÉTAPE : Correction explicite des typos courants dans les types XSD
+    # S'assurer que 'xsd:stri' est remplacé par 'xsd:string'
+    clean_sparql_body = re.sub(r'xsd:stri(?![a-zA-Z])', r'xsd:string', clean_sparql_body)
+    # S'assurer que d'autres typos XSD soient corrigés si vous en rencontrez (ex: xsd:integ -> xsd:integer)
+    clean_sparql_body = re.sub(r'xsd:integ(?![a-zA-Z])', r'xsd:integer', clean_sparql_body)
 
-    # Ajouter PREFIX rdfs si nécessaire
-    if "rdfs:subClassOf" in query and "PREFIX rdfs:" not in query:
-        query = f"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n" + query
+    # DÉBOGAGE : Avant le remplacement de 'donneur'
+    print(f"DEBUG_CLEAN: Avant remplacement 'donneur':\n{clean_sparql_body[:500]}...")
+    # Correction spécifique: Assurez-vous que la propriété "donneur" est remplacée par "donneAvis"
+    clean_sparql_body = re.sub(r'mobilite:donneur', r'mobilite:donneAvis', clean_sparql_body)
+    # DÉBOGAGE : Après le remplacement de 'donneur'
+    print(f"DEBUG_CLEAN: Après remplacement 'donneur':\n{clean_sparql_body[:500]}...")
+    
+    # Nettoyer les espaces multiples et les lignes vides
+    clean_sparql_body = re.sub(r'\n\s*\n', '\n', clean_sparql_body)
+    clean_sparql_body = re.sub(r'[ ]+', ' ', clean_sparql_body)
+    
+    final_query = f"{final_prefix_block}\n{clean_sparql_body}".strip()
+    print(f"DEBUG_CLEAN: Sortie finale nettoyée (début):\n{final_query[:1000]}...")
+    return final_query
 
-    # Ajouter PREFIX rdf si nécessaire
-    if "rdf:type" in query and "PREFIX rdf:" not in query:
-        query = f"PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n" + query
 
-    # Nettoyer les espaces multiples
-    query = re.sub(r'\n\s*\n', '\n', query)
-    query = re.sub(r'[ ]+', ' ', query)
 
-    return query.strip()
 # ======================
 # 🔐 GESTION DES RÔLES (Version ultra-simplifiée)
 # ======================
@@ -721,6 +845,117 @@ def get_tickets_by_utilisateur(utilisateur_id: str):
 # 🧠 INTELLIGENCE ARTIFICIELLE AVEC OLLAMA
 # ======================
 
+def generate_sparql_with_ollama(user_question: str) -> str:
+    """
+    Génère une requête SPARQL en utilisant Ollama, et retourne la réponse brute.
+    """
+    prompt = f"""
+Tu es un expert en RDF et SPARQL. Ta mission est de convertir des questions en français en requêtes SPARQL valides.
+
+CONTEXTE ONTOLOGIE MOBILITÉ :
+- Namespace : PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#>
+- Classes principales : 
+  Personne, Conducteur, Piéton, Voyageur
+  ReseauTransport, TransportPublic, TransportPrive, MobiliteDouce
+  Bus, Metro, Voiture, Velo, Trottinette
+  Infrastructure, Route, StationsBus, StationsMetro, Parking, Batiment
+  Trajet, TrajetOptimal, TrajetCourt, TrajetRecommandé
+  Avis, AvisPositif, AvisNegatif
+  Ticket, TicketBus, TicketMetro, TicketParking
+  StationRecharge, RechargeElectrique, RechargeGaz
+  Trafic, Accident, Embouteillage, Radar
+  Statistiques, StatistiquesAccidents, StatistiquesPollution, StatistiquesUtilisation
+  SmartCity
+
+- Propriétés de données :
+  nom, prenom, age, email, telephone, dateNaissance, genre, nationalite, languePreferee
+  dateInscription, statutCompte, niveauAbonnement, scoreFidelite, preferencesAccessibilite
+  numeroPermis, dateObtentionPermis, categoriePermis, pointsPermis, experienceConduite
+  distance, duree, scoreOptimisation, niveauTrafic, heureDepart, heureArrivee
+  vitesseMoyenne, consommationEnergie, emissionsCO2, nombreArrets, conditionsMeteo
+  temperature, scoreSecurite, scoreConfort
+  marque, modele, anneeFabrication, immatriculation, couleur, kilometrage
+  niveauCarburant, consommationMoyenne
+  commentaire, note, dateAvis, langueAvis, categorieAvis, scoreUtilite, verifie, nombreSignalements
+  numeroTicket, prix, dateAachat, dateExpiration, typeTicket, classeTicket, zoneValidite
+  statutTicket, methodePaiement, nombreValidations
+  adresse, coordonneesGPS, dateConstruction, etatMaintenance, capaciteAccueil
+  niveauAccessibilite, horairesOuverture, superficie
+  capacite, prixKwh, disponible, typeConnecteur, puissanceMax, tempsRechargeMoyen
+  heureOuverture, heureFermeture, operateur
+  intensite, dureeIncident, causeIncident, gravite, nombreVehiculesImpliques
+  vitesseMoyenneTrafic, niveauService
+  vitesseMaximale, typeRadar, dateInstallation, etatFonctionnement, nombreInfractions
+  valeur, dateMesure, unite, periodeMesure, margeErreur, niveauConfiance, tendance, sourceDonnees
+
+- Propriétés objet :
+  effectueTrajet, utiliseReseauTransport, donneAvis, possedeTicket, habiteA, travailleA
+  prefereMoyenTransport, frequenteZone, commenceA, terminaA, utiliseMoyenTransport
+  proposePar, appartientA, circuleSur, conduitPar, utiliseStationRecharge
+  concerneTransport, concerneInfrastructure, valablePour, acheteA, donneAccesA
+  estConnecteA, disposeDe, accueilleStation, contient, estSurveillePar, alimentePar
+  maintenuPar, seProduitSur, affecteTrajet, genereAlerte, mesureSur, generePar
+
+QUESTION À TRADUIRE : "{user_question}"
+# ... (votre prompt actuel) ...
+
+INSTRUCTIONS STRICTES :
+1. Génère UNIQUEMENT la requête SPARQL complète et valide
+2. Pas de texte explicatif, pas de commentaires, pas de notes
+3. Pas de "SPARQL:" ou autres préfixes textuels
+4. Pas de backticks Markdown
+5. Utilise obligatoirement le préfixe mobilite:
+6. Pour les hiérarchies, utilise rdfs:subClassOf*
+7. Sois précis dans les relations
+8. Utilise xsd: pour les types de données appropriés.
+9. Pour les créations, génère une requête INSERT DATA avec un nouvel ID unique si non spécifié, ou utilise celui spécifié.
+10. Lorsque la question fait référence à des "utilisateurs", "personnes", "conducteurs", "piétons", ou "voyageurs", utilise la classe principale `mobilite:Personne` ou sa sous-classe la plus pertinente.
+11. Pour identifier les personnes ayant donné un avis, tu DOIS utiliser la propriété objet `mobilite:donneAvis` (NE PAS utiliser 'mobilite:donneur').
+12. **Si la question demande d'ajouter une NOUVELLE personne et de la lier à un avis, tu dois ABSOLUMENT inclure les triples pour créer cette nouvelle personne (a mobilite:Personne, mobilite:nom, mobilite:prenom, mobilite:age, mobilite:email, etc.) DANS LE MÊME bloc INSERT DATA que l'avis.**
+
+EXEMPLES :
+Question: "Liste toutes les personnes"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT ?personne WHERE {{ ?personne a ?typePersonne . ?typePersonne rdfs:subClassOf* mobilite:Personne . }}
+
+Question: "Ajoute une personne nommée Jean Dupont, age 30, email jean.dupont@example.com avec l'ID personne_JD1"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> INSERT DATA {{ mobilite:personne_JD1 a mobilite:Personne ; mobilite:nom "Dupont"^^xsd:string ; mobilite:prenom "Jean"^^xsd:string ; mobilite:age "30"^^xsd:integer ; mobilite:email "jean.dupont@example.com"^^xsd:string . }}
+
+Question: "Ajoute un avis avec le commentaire 'Excellent service' et la note 5, l'ID AvisTest001, donné par une personne nommée Jean Dupont, age 30, email jean.dupont@example.com avec l'ID personne_JD1"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> PREFIX xsd: <http://www.w3.org/2001/XMLSchema#> INSERT DATA {{ mobilite:AvisTest001 a mobilite:Avis ; mobilite:commentaire "Excellent service"^^xsd:string ; mobilite:note "5"^^xsd:integer ; mobilite:donneAvis mobilite:personne_JD1 . mobilite:personne_JD1 a mobilite:Personne ; mobilite:nom "Dupont"^^xsd:string ; mobilite:prenom "Jean"^^xsd:string ; mobilite:age "30"^^xsd:integer ; mobilite:email "jean.dupont@example.com"^^xsd:string . }}
+
+Question: "Quels sont les utilisateurs ayant donné des avis ?"
+Réponse: PREFIX mobilite: <http://www.semanticweb.org/smartcity/ontologies/mobilite#> PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> SELECT DISTINCT ?personne ?nom ?prenom WHERE {{ ?personne a ?typePersonne . ?typePersonne rdfs:subClassOf* mobilite:Personne . ?personne mobilite:donneAvis ?avis . OPTIONAL {{ ?personne mobilite:nom ?nom . }} OPTIONAL {{ ?personne mobilite:prenom ?prenom . }} }}
+    """
+
+    try:
+        response = requests.post(
+            f"{OLLAMA_BASE_URL}/api/generate",
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.1,
+                    "top_p": 0.9,
+                    "num_predict": 500
+                }
+            },
+            timeout=120
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        raw_ollama_sparql = result["response"].strip() # Réponse brute d'Ollama
+        
+        print(f"📝 Réponse brute d'Ollama:\n{raw_ollama_sparql}")
+        
+        # NE PAS NETTOYER ICI. RETOURNE LA RÉPONSE BRUTE.
+        return raw_ollama_sparql
+        
+    except requests.exceptions.ConnectionError:
+        raise Exception("❌ Ollama n'est pas démarré. Lancez 'ollama serve'")
+    except Exception as e:
+        raise Exception(f"❌ Erreur Ollama : {str(e)}")
 # def generate_sparql_with_ollama(user_question: str) -> str:
 #     """
 #     Génère une requête SPARQL en utilisant Ollama
@@ -819,6 +1054,9 @@ def get_tickets_by_utilisateur(utilisateur_id: str):
 #         raise Exception("❌ Ollama n'est pas démarré. Lancez 'ollama serve'")
 #     except Exception as e:
 #         raise Exception(f"❌ Erreur Ollama : {str(e)}")
+
+
+
 
 # ======================
 # 📦 MODÈLES DE DONNÉES
@@ -1003,6 +1241,161 @@ def get_all_trajets():
             "personne": r["personne"]["value"].split("#")[-1] if "personne" in r else None
         })
     return trajets
+# ... (Gardez toutes les importations et le reste du code inchangé) ...
+
+# Assurez-vous que cette fonction is_update_query est bien présente dans votre fichier app.py
+# (par exemple, juste après la fonction validate_sparql_query)
+def is_update_query(query: str) -> bool:
+    """Vérifie si la requête SPARQL est une opération d'écriture - VERSION CORRIGÉE"""
+    query_upper = query.strip().upper()
+    
+    # Vérifier les mots-clés UPDATE au début de la requête (après les PREFIX)
+    # Ignorer les lignes de préfixes pour trouver le vrai début de la requête
+    query_lines = [line for line in query.split('\n') if line.strip() and not line.strip().startswith('PREFIX')]
+    
+    if not query_lines:
+        return False
+    
+    first_meaningful_line = query_lines[0].strip().upper()
+    
+    # Vérifier si c'est une opération d'écriture
+    is_update = (
+        first_meaningful_line.startswith("INSERT DATA") or
+        first_meaningful_line.startswith("DELETE DATA") or 
+        first_meaningful_line.startswith("INSERT") or
+        first_meaningful_line.startswith("DELETE") or
+        first_meaningful_line.startswith("LOAD") or
+        first_meaningful_line.startswith("CLEAR") or
+        first_meaningful_line.startswith("DROP") or
+        first_meaningful_line.startswith("CREATE") or
+        first_meaningful_line.startswith("ADD") or
+        first_meaningful_line.startswith("MOVE") or
+        first_meaningful_line.startswith("COPY")
+    )
+    
+    print(f"🔍 Détection UPDATE: {is_update} - Première ligne: '{first_meaningful_line}'")
+    return is_update
+
+@app.post("/ask/")
+async def ask_question(question_data: dict):
+    """
+    Endpoint principal : Reçoit une question en français, génère la requête SPARQL avec Ollama,
+    l'exécute sur Fuseki et retourne les résultats ou un message de succès.
+    """
+    try:
+        user_question = question_data.get("question", "").strip()
+        if not user_question:
+            raise HTTPException(status_code=400, detail="La question est requise")
+
+        print(f"🧠 Question reçue: {user_question}")
+
+        # 1. Génération de la requête SPARQL avec Ollama
+        print("🔄 Génération de la requête SPARQL avec Ollama...")
+        sparql_query = generate_sparql_with_ollama(user_question)
+        print(f"📝 Requête SPARQL générée:\n{sparql_query}")
+
+        # 2. Nettoyage et validation de la requête
+        cleaned_query = clean_sparql_query(sparql_query)
+        print(f"🧹 Requête nettoyée:\n{cleaned_query}")
+
+        # 3. Validation améliorée
+        is_update = is_update_query(cleaned_query)
+        is_valid = validate_sparql_query(cleaned_query)
+        
+        print(f"🔍 Analyse requête - UPDATE: {is_update}, VALIDE: {is_valid}")
+        
+        if not is_valid and not is_update:
+            raise HTTPException(
+                status_code=400, 
+                detail="La requête SPARQL générée n'est pas valide"
+            )
+
+        # 4. Déterminer le type de requête et l'exécuter
+        if is_update:
+            print("🚀 Exécution d'une requête SPARQL UPDATE sur Fuseki...")
+            try:
+                success = send_to_fuseki(cleaned_query)
+                
+                if success:
+                    sync_from_fuseki_to_local()
+                    return {
+                        "question": user_question,
+                        "sparql_query": cleaned_query,
+                        "message": "✅ Requête d'écriture SPARQL exécutée avec succès.",
+                        "results": [],
+                        "count": 0
+                    }
+                else:
+                    raise HTTPException(
+                        status_code=500, 
+                        detail="Échec de l'exécution de la requête d'écriture"
+                    )
+                    
+            except HTTPException:
+                raise
+            except Exception as e:
+                print(f"❌ Erreur inattendue lors de l'UPDATE: {e}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Erreur lors de l'exécution de la requête d'écriture: {str(e)}"
+                )
+        
+        else:
+            print("🚀 Exécution d'une requête SPARQL SELECT sur Fuseki...")
+            try:
+                results = execute_sparql_query(cleaned_query)
+                
+                if results is None:
+                    raise HTTPException(
+                        status_code=500, 
+                        detail="Erreur lors de l'exécution de la requête SPARQL SELECT"
+                    )
+
+                # Formatage des résultats
+                formatted_results = format_sparql_results(results)
+                
+                return {
+                    "question": user_question,
+                    "sparql_query": cleaned_query,
+                    "results": formatted_results,
+                    "count": len(formatted_results)
+                }
+                
+            except Exception as e:
+                print(f"❌ Erreur lors de l'exécution SELECT: {e}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Erreur lors de l'exécution de la requête: {str(e)}"
+                )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erreur globale dans /ask/: {e}")
+        import traceback
+        print(f"📝 Stack trace: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Erreur interne du serveur: {str(e)}"
+        )
+
+def format_sparql_results(results):
+    """
+    Formate les résultats SPARQL en un format plus lisible
+    """
+    if "results" not in results or "bindings" not in results["results"]:
+        return []
+
+    formatted = []
+    for binding in results["results"]["bindings"]:
+        item = {}
+        for key, value in binding.items():
+            # Extraire le nom court après le # pour les URIs
+            if value["type"] == "uri" and "#" in value["value"]:
+                item[key] = value["value"].split("#")[-1]
+            else:
+                item[key] = value["value"]
+        formatted.append(item)
 
 # @app.post("/ask/")
 # async def ask_question(question_data: dict):
@@ -1068,6 +1461,75 @@ def get_all_trajets():
     
 #     return formatted
 
+def validate_sparql_query(query: str) -> bool:
+    """Valide la syntaxe basique d'une requête SPARQL - VERSION CORRIGÉE"""
+    if not query:
+        return False
+    
+    query_upper = query.upper().strip()
+    
+    # Vérifier les types de requêtes valides
+    valid_query_types = ['SELECT', 'ASK', 'CONSTRUCT', 'DESCRIBE', 'INSERT', 'DELETE']
+    
+    # Vérifier si c'est une requête valide
+    is_valid = (
+        any(keyword in query_upper for keyword in valid_query_types) and
+        '{' in query and '}' in query
+    )
+    
+    print(f"🔍 Validation SPARQL: {is_valid} - Début: {query_upper[:50]}")
+    return is_valid
+@app.post("/debug/test-query/")
+async def test_sparql_query(query_data: dict):
+    """
+    Endpoint de debug pour tester manuellement les requêtes SPARQL
+    """
+    try:
+        query = query_data.get("query", "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="La requête SPARQL est requise")
+        
+        print(f"🧪 Test de requête:\n{query}")
+        
+        # Nettoyer la requête
+        cleaned_query = clean_sparql_query(query)
+        print(f"🧹 Requête nettoyée:\n{cleaned_query}")
+        
+        # Analyser le type
+        is_update = is_update_query(cleaned_query)
+        is_valid = validate_sparql_query(cleaned_query)
+        
+        print(f"🔍 Analyse - UPDATE: {is_update}, VALIDE: {is_valid}")
+        
+        if is_update:
+            print("🚀 Exécution comme UPDATE...")
+            success = send_to_fuseki(cleaned_query)
+            return {
+                "type": "UPDATE",
+                "success": success,
+                "cleaned_query": cleaned_query,
+                "message": "Requête UPDATE exécutée" if success else "Échec UPDATE"
+            }
+        else:
+            print("🔍 Exécution comme SELECT...")
+            results = execute_sparql_query(cleaned_query)
+            formatted_results = format_sparql_results(results)
+            
+            return {
+                "type": "SELECT",
+                "success": True,
+                "cleaned_query": cleaned_query,
+                "results": formatted_results,
+                "count": len(formatted_results)
+            }
+            
+    except Exception as e:
+        print(f"❌ Erreur dans test-query: {e}")
+        return {
+            "error": str(e),
+            "type": "ERROR",
+            "success": False
+        }
 # def validate_sparql_query(query: str) -> bool:
 #     """Valide la syntaxe basique d'une requête SPARQL"""
 #     if not query:
@@ -1185,27 +1647,43 @@ def get_all_personnes():
 
 @app.post("/add_trajet/")
 def add_trajet(trajet: Trajet):
+    # Utiliser "Trajet" comme type par défaut si non spécifié
+    trajet_type = getattr(trajet, 'type_trajet', 'Trajet')
+    
     trajet_uri = MOBILITE[trajet.id]
-    g.add((trajet_uri, RDF.type, MOBILITE.Trajet))
+    g.add((trajet_uri, RDF.type, MOBILITE[trajet_type]))
     g.add((trajet_uri, MOBILITE.distance, Literal(trajet.distance, datatype=XSD.float)))
     g.add((trajet_uri, MOBILITE.duree, Literal(trajet.duree, datatype=XSD.float)))
-    g.add((trajet_uri, MOBILITE.heureDepart, Literal(trajet.heureDepart, datatype=XSD.string)))
-    g.add((trajet_uri, MOBILITE.heureArrivee, Literal(trajet.heureArrivee, datatype=XSD.string)))
+    
+    # Gérer les heures optionnelles
+    if trajet.heureDepart:
+        g.add((trajet_uri, MOBILITE.heureDepart, Literal(trajet.heureDepart, datatype=XSD.string)))
+    if trajet.heureArrivee:
+        g.add((trajet_uri, MOBILITE.heureArrivee, Literal(trajet.heureArrivee, datatype=XSD.string)))
+    
     g.serialize("mobilite_updated.rdf", format="xml")
+
+    # Construire la requête INSERT dynamiquement
+    heure_depart_part = f' ; mobilite:heureDepart "{trajet.heureDepart}"^^xsd:string' if trajet.heureDepart else ""
+    heure_arrivee_part = f' ; mobilite:heureArrivee "{trajet.heureArrivee}"^^xsd:string' if trajet.heureArrivee else ""
 
     insert_query = f"""
     PREFIX mobilite: <{MOBILITE}>
     PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
     INSERT DATA {{
-        mobilite:{trajet.id} a mobilite:Trajet ;
+        mobilite:{trajet.id} a mobilite:{trajet_type} ;
                        mobilite:distance "{trajet.distance}"^^xsd:float ;
-                       mobilite:duree "{trajet.duree}"^^xsd:float ;
-                       mobilite:heureDepart "{trajet.heureDepart}"^^xsd:string ;
-                       mobilite:heureArrivee "{trajet.heureArrivee}"^^xsd:string .
+                       mobilite:duree "{trajet.duree}"^^xsd:float{heure_depart_part}{heure_arrivee_part} .
     }}
     """
-    send_to_fuseki(insert_query)
-    return {"message": f"🛣️ Trajet '{trajet.id}' ajouté avec succès."}
+    
+    success = send_to_fuseki(insert_query)
+    
+    if success:
+        sync_from_fuseki_to_local()
+        return {"message": f"🛣️ Trajet '{trajet.id}' ajouté avec succès."}
+    else:
+        return {"error": f"❌ Échec de l'ajout du trajet '{trajet.id}' à Fuseki"}
 
 @app.post("/personne/effectue_trajet/")
 def add_effectue_trajet(link: EffectueTrajet):
@@ -1328,7 +1806,7 @@ def get_avis():
       OPTIONAL {{ 
         ?utilisateur mobilite:donneAvis ?avis .
         BIND(STR(?utilisateur) AS ?utilisateur_id)
-        OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilisateur . }}
+        OPTIONAL {{ ?utilisateur mobilite:nom ?nom_utilhisateur . }}
         OPTIONAL {{ ?utilisateur mobilite:prenom ?prenom_utilisateur . }}
       }}
     }}
@@ -1655,24 +2133,544 @@ def add_statistique(stat: Statistique):
 # 🏙️ SMART CITY - ENDPOINTS
 # ======================
 
+# ======================
+# 🏙️ SMART CITIES - ENDPOINTS COMPLETS
+# ======================
+
+class SmartCityCreate(BaseModel):
+    id: str
+    nom: str = ""
+    gouvernance: str = ""
+    description: str = ""
+
 @app.post("/add_smartcity/")
-def add_smartcity(city: SmartCity):
-    city_uri = MOBILITE[city.id]
-    g.add((city_uri, RDF.type, MOBILITE.SmartCity))
-    g.add((city_uri, MOBILITE.nom, Literal(city.nom, datatype=XSD.string)))
-    g.serialize("mobilite_updated.rdf", format="xml")
+def add_smartcity(city: SmartCityCreate):
+    """Ajoute une nouvelle SmartCity avec tous les champs"""
+    try:
+        print(f"🏙️ Tentative de création de la SmartCity: {city.id}")
+        
+        # Vérifier si la SmartCity existe déjà
+        check_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{city.id} a mobilite:SmartCity .
+        }}
+        """
+        
+        sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql_check.setReturnFormat(JSON)
+        sparql_check.setQuery(check_query)
+        check_result = sparql_check.query().convert()
+        
+        if check_result["boolean"]:
+            return {"error": f"❌ La SmartCity '{city.id}' existe déjà"}
 
-    insert_query = f"""
-    PREFIX mobilite: <{MOBILITE}>
-    PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-    INSERT DATA {{
-        mobilite:{city.id} a mobilite:SmartCity ;
-                     mobilite:nom "{city.nom}"^^xsd:string .
-    }}
+        # Créer la SmartCity dans le graphe local
+        city_uri = MOBILITE[city.id]
+        g.add((city_uri, RDF.type, MOBILITE.SmartCity))
+        g.add((city_uri, MOBILITE.nom, Literal(city.nom, datatype=XSD.string)))
+        
+        # Ajouter les champs optionnels s'ils sont fournis
+        if city.gouvernance:
+            g.add((city_uri, MOBILITE.gouvernance, Literal(city.gouvernance, datatype=XSD.string)))
+        if city.description:
+            g.add((city_uri, MOBILITE.description, Literal(city.description, datatype=XSD.string)))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 SmartCity sauvegardée localement: {city.id}")
+
+        # Construire la requête INSERT dynamiquement
+        gouvernance_part = f' ; mobilite:gouvernance "{city.gouvernance}"^^xsd:string' if city.gouvernance else ""
+        description_part = f' ; mobilite:description "{city.description}"^^xsd:string' if city.description else ""
+
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        INSERT DATA {{
+            mobilite:{city.id} a mobilite:SmartCity ;
+                         mobilite:nom "{city.nom}"^^xsd:string{gouvernance_part}{description_part} .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            # Synchroniser le fichier local avec Fuseki
+            sync_from_fuseki_to_local()
+            
+            response_message = f"🏙️ SmartCity '{city.id}' créée avec succès."
+            if city.gouvernance:
+                response_message += f" Gouvernance: {city.gouvernance}"
+            if city.description:
+                response_message += f" Description: {city.description}"
+                
+            return {
+                "message": response_message,
+                "city_id": city.id,
+                "nom": city.nom,
+                "gouvernance": city.gouvernance,
+                "description": city.description
+            }
+        else:
+            return {"error": f"❌ Échec de la création de la SmartCity '{city.id}' dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de la SmartCity: {str(e)}")
+        import traceback
+        print(f"📝 Stack trace: {traceback.format_exc()}")
+        return {"error": f"Erreur lors de la création de la SmartCity: {str(e)}"}
+
+@app.get("/smartcities/")
+def get_all_smartcities():
+    """Récupère toutes les SmartCities avec leurs détails complets"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT ?id ?nom ?gouvernance ?description WHERE {{
+            ?id a mobilite:SmartCity .
+            
+            OPTIONAL {{ ?id mobilite:nom ?nom . }}
+            OPTIONAL {{ ?id mobilite:gouvernance ?gouvernance . }}
+            OPTIONAL {{ ?id mobilite:description ?description . }}
+        }}
+        ORDER BY ?id
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        print(f"🔍 Résultats bruts SPARQL: {len(results['results']['bindings'])} entrées")
+
+        cities = []
+        seen_cities = set()
+
+        for r in results["results"]["bindings"]:
+            city_uri = r["id"]["value"]
+            
+            # Éviter les doublons
+            if city_uri in seen_cities:
+                continue
+            seen_cities.add(city_uri)
+                
+            # Extraire l'ID de la SmartCity
+            city_id = city_uri.split("#")[-1] if "#" in city_uri else city_uri.split("/")[-1]
+            
+            city_data = {
+                "id": city_id,
+                "nom": r.get("nom", {}).get("value", city_id),
+                "gouvernance": r.get("gouvernance", {}).get("value", ""),
+                "description": r.get("description", {}).get("value", "")
+            }
+            cities.append(city_data)
+
+        print(f"✅ {len(cities)} SmartCities trouvées")
+        return cities
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des SmartCities: {str(e)}")
+        # Fallback vers le graphe local
+        return get_smartcities_from_local_graph()
+
+def get_smartcities_from_local_graph():
     """
-    send_to_fuseki(insert_query)
-    return {"message": f"🏙️ SmartCity '{city.id}' ajoutée avec succès."}
+    Récupère les SmartCities depuis le graphe local (fallback)
+    """
+    try:
+        cities = []
+        
+        # Chercher toutes les instances de SmartCity
+        for s, p, o in g.triples((None, RDF.type, MOBILITE.SmartCity)):
+            city_data = {
+                "id": str(s).split("#")[-1],
+                "nom": "",
+                "gouvernance": "",
+                "description": ""
+            }
+            
+            # Récupérer les propriétés
+            for s2, p2, o2 in g.triples((s, None, None)):
+                if str(p2) == str(MOBILITE.nom):
+                    city_data["nom"] = str(o2)
+                elif str(p2) == str(MOBILITE.gouvernance):
+                    city_data["gouvernance"] = str(o2)
+                elif str(p2) == str(MOBILITE.description):
+                    city_data["description"] = str(o2)
+            
+            # Si pas de nom, utiliser l'ID comme nom
+            if not city_data["nom"]:
+                city_data["nom"] = city_data["id"]
+                
+            cities.append(city_data)
+        
+        print(f"📊 Fallback: {len(cities)} SmartCities du graphe local")
+        return cities
+        
+    except Exception as e:
+        print(f"❌ Erreur dans le fallback local: {e}")
+        return []
+# ======================
+# 📊 STATISTIQUES SPÉCIFIQUES - ENDPOINTS
+# ======================
 
+class StatistiquePollution(BaseModel):
+    id: str
+    tauxPollution: float
+
+class StatistiqueAccident(BaseModel):
+    id: str
+    nbreDaccident: int
+
+class Observation(BaseModel):
+    utilisateur_id: str
+    statistique_id: str
+
+@app.post("/add_statistique_pollution/")
+def add_statistique_pollution(stat: StatistiquePollution):
+    """Ajoute une statistique de pollution"""
+    try:
+        print(f"🌫️ Tentative de création de statistique pollution: {stat.id}")
+        
+        # Vérifier si la statistique existe déjà
+        check_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{stat.id} a mobilite:StatistiquesPollution .
+        }}
+        """
+        
+        sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql_check.setReturnFormat(JSON)
+        sparql_check.setQuery(check_query)
+        check_result = sparql_check.query().convert()
+        
+        if check_result["boolean"]:
+            return {"error": f"❌ La statistique pollution '{stat.id}' existe déjà"}
+
+        # Créer la statistique dans le graphe local
+        stat_uri = MOBILITE[stat.id]
+        g.add((stat_uri, RDF.type, MOBILITE.StatistiquesPollution))
+        g.add((stat_uri, MOBILITE.valeur, Literal(stat.tauxPollution, datatype=XSD.float)))
+        g.add((stat_uri, MOBILITE.unite, Literal("µg/m³", datatype=XSD.string)))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 Statistique pollution sauvegardée localement: {stat.id}")
+
+        # Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        INSERT DATA {{
+            mobilite:{stat.id} a mobilite:StatistiquesPollution ;
+                         mobilite:valeur "{stat.tauxPollution}"^^xsd:float ;
+                         mobilite:unite "µg/m³"^^xsd:string .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            sync_from_fuseki_to_local()
+            return {
+                "message": f"🌫️ Statistique pollution '{stat.id}' créée avec succès",
+                "stat_id": stat.id,
+                "tauxPollution": stat.tauxPollution,
+                "unite": "µg/m³"
+            }
+        else:
+            return {"error": f"❌ Échec de la création de la statistique pollution '{stat.id}' dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de la statistique pollution: {str(e)}")
+        return {"error": f"Erreur lors de la création de la statistique pollution: {str(e)}"}
+
+@app.post("/add_statistique_accident/")
+def add_statistique_accident(stat: StatistiqueAccident):
+    """Ajoute une statistique d'accident"""
+    try:
+        print(f"🚨 Tentative de création de statistique accident: {stat.id}")
+        
+        # Vérifier si la statistique existe déjà
+        check_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{stat.id} a mobilite:StatistiquesAccidents .
+        }}
+        """
+        
+        sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql_check.setReturnFormat(JSON)
+        sparql_check.setQuery(check_query)
+        check_result = sparql_check.query().convert()
+        
+        if check_result["boolean"]:
+            return {"error": f"❌ La statistique accident '{stat.id}' existe déjà"}
+
+        # Créer la statistique dans le graphe local
+        stat_uri = MOBILITE[stat.id]
+        g.add((stat_uri, RDF.type, MOBILITE.StatistiquesAccidents))
+        g.add((stat_uri, MOBILITE.valeur, Literal(stat.nbreDaccident, datatype=XSD.integer)))
+        g.add((stat_uri, MOBILITE.unite, Literal("accidents", datatype=XSD.string)))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 Statistique accident sauvegardée localement: {stat.id}")
+
+        # Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+        INSERT DATA {{
+            mobilite:{stat.id} a mobilite:StatistiquesAccidents ;
+                         mobilite:valeur "{stat.nbreDaccident}"^^xsd:integer ;
+                         mobilite:unite "accidents"^^xsd:string .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            sync_from_fuseki_to_local()
+            return {
+                "message": f"🚨 Statistique accident '{stat.id}' créée avec succès",
+                "stat_id": stat.id,
+                "nbreDaccident": stat.nbreDaccident,
+                "unite": "accidents"
+            }
+        else:
+            return {"error": f"❌ Échec de la création de la statistique accident '{stat.id}' dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de la statistique accident: {str(e)}")
+        return {"error": f"Erreur lors de la création de la statistique accident: {str(e)}"}
+
+@app.post("/add_observation/")
+def add_observation(obs: Observation):
+    """Crée une relation d'observation entre un utilisateur et une statistique"""
+    try:
+        print(f"👁️ Tentative de création d'observation: {obs.utilisateur_id} → {obs.statistique_id}")
+        
+        # Vérifier si l'utilisateur existe
+        check_user_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{obs.utilisateur_id} a ?type .
+            FILTER(STRSTARTS(STR(?type), STR(mobilite:)))
+        }}
+        """
+        
+        sparql_check = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql_check.setReturnFormat(JSON)
+        sparql_check.setQuery(check_user_query)
+        user_exists = sparql_check.query().convert()["boolean"]
+        
+        if not user_exists:
+            return {"error": f"❌ L'utilisateur '{obs.utilisateur_id}' n'existe pas"}
+        
+        # Vérifier si la statistique existe
+        check_stat_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{obs.statistique_id} a ?type .
+            FILTER(STRSTARTS(STR(?type), STR(mobilite:)))
+        }}
+        """
+        
+        sparql_check.setQuery(check_stat_query)
+        stat_exists = sparql_check.query().convert()["boolean"]
+        
+        if not stat_exists:
+            return {"error": f"❌ La statistique '{obs.statistique_id}' n'existe pas"}
+        
+        # Vérifier si la relation existe déjà
+        check_relation_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        ASK WHERE {{
+            mobilite:{obs.utilisateur_id} mobilite:mesureSur mobilite:{obs.statistique_id} .
+        }}
+        """
+        
+        sparql_check.setQuery(check_relation_query)
+        relation_exists = sparql_check.query().convert()["boolean"]
+        
+        if relation_exists:
+            return {"warning": f"⚠️ La relation d'observation existe déjà entre {obs.utilisateur_id} et {obs.statistique_id}"}
+
+        # Ajouter au graphe local
+        utilisateur_uri = MOBILITE[obs.utilisateur_id]
+        statistique_uri = MOBILITE[obs.statistique_id]
+        g.add((utilisateur_uri, MOBILITE.mesureSur, statistique_uri))
+        
+        # Sauvegarder le fichier local
+        g.serialize("mobilite.rdf", format="xml")
+        print(f"💾 Observation sauvegardée localement: {obs.utilisateur_id} → {obs.statistique_id}")
+
+        # Envoyer à Fuseki
+        insert_query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        INSERT DATA {{
+            mobilite:{obs.utilisateur_id} mobilite:mesureSur mobilite:{obs.statistique_id} .
+        }}
+        """
+        
+        success = send_to_fuseki(insert_query)
+        
+        if success:
+            sync_from_fuseki_to_local()
+            return {
+                "message": f"👁️ Observation créée avec succès: {obs.utilisateur_id} → {obs.statistique_id}",
+                "utilisateur_id": obs.utilisateur_id,
+                "statistique_id": obs.statistique_id,
+                "relation_type": "mesureSur"
+            }
+        else:
+            return {"error": f"❌ Échec de la création de l'observation dans Fuseki"}
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la création de l'observation: {str(e)}")
+        return {"error": f"Erreur lors de la création de l'observation: {str(e)}"}
+
+@app.get("/statistiques/")
+def get_all_statistiques():
+    """Récupère toutes les statistiques avec leurs détails"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT ?id ?type ?valeur ?unite WHERE {{
+            ?id a ?type .
+            ?type rdfs:subClassOf* mobilite:Statistiques .
+            
+            OPTIONAL {{ ?id mobilite:valeur ?valeur . }}
+            OPTIONAL {{ ?id mobilite:unite ?unite . }}
+        }}
+        ORDER BY ?id
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        print(f"🔍 Résultats bruts SPARQL statistiques: {len(results['results']['bindings'])} entrées")
+
+        statistiques = []
+        seen_stats = set()
+
+        for r in results["results"]["bindings"]:
+            stat_uri = r["id"]["value"]
+            
+            # Éviter les doublons
+            if stat_uri in seen_stats:
+                continue
+            seen_stats.add(stat_uri)
+                
+            # Extraire l'ID de la statistique
+            stat_id = stat_uri.split("#")[-1] if "#" in stat_uri else stat_uri.split("/")[-1]
+            
+            # Déterminer le type de statistique
+            type_uri = r["type"]["value"]
+            stat_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+            
+            stat_data = {
+                "id": stat_id,
+                "type": stat_type,
+                "valeur": float(r["valeur"]["value"]) if "valeur" in r else 0,
+                "unite": r.get("unite", {}).get("value", "")
+            }
+            
+            # Ajouter des champs spécifiques selon le type
+            if stat_type == "StatistiquesPollution":
+                stat_data["tauxPollution"] = float(r["valeur"]["value"]) if "valeur" in r else 0
+            elif stat_type == "StatistiquesAccidents":
+                stat_data["nbreDaccident"] = int(r["valeur"]["value"]) if "valeur" in r else 0
+            
+            statistiques.append(stat_data)
+
+        print(f"✅ {len(statistiques)} statistiques trouvées")
+        return statistiques
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des statistiques: {str(e)}")
+        return []
+
+@app.get("/observations/")
+def get_all_observations():
+    """Récupère toutes les observations avec leurs détails"""
+    try:
+        sparql = SPARQLWrapper(FUSEKI_QUERY_URL)
+        sparql.setReturnFormat(JSON)
+        
+        query = f"""
+        PREFIX mobilite: <{MOBILITE}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        
+        SELECT ?utilisateur ?statistique ?type_stat ?valeur ?unite WHERE {{
+            ?utilisateur mobilite:mesureSur ?statistique .
+            ?statistique a ?type_stat .
+            
+            OPTIONAL {{ ?statistique mobilite:valeur ?valeur . }}
+            OPTIONAL {{ ?statistique mobilite:unite ?unite . }}
+        }}
+        ORDER BY ?utilisateur
+        """
+        
+        sparql.setQuery(query)
+        results = sparql.query().convert()
+
+        print(f"🔍 Résultats bruts SPARQL observations: {len(results['results']['bindings'])} entrées")
+
+        observations = []
+        seen_obs = set()
+
+        for r in results["results"]["bindings"]:
+            utilisateur_uri = r["utilisateur"]["value"]
+            statistique_uri = r["statistique"]["value"]
+            
+            # Clé unique pour éviter les doublons
+            obs_key = f"{utilisateur_uri}_{statistique_uri}"
+            if obs_key in seen_obs:
+                continue
+            seen_obs.add(obs_key)
+                
+            # Extraire les IDs
+            utilisateur_id = utilisateur_uri.split("#")[-1] if "#" in utilisateur_uri else utilisateur_uri.split("/")[-1]
+            statistique_id = statistique_uri.split("#")[-1] if "#" in statistique_uri else statistique_uri.split("/")[-1]
+            
+            # Déterminer le type de statistique
+            type_uri = r["type_stat"]["value"]
+            stat_type = type_uri.split("#")[-1] if "#" in type_uri else type_uri.split("/")[-1]
+            
+            obs_data = {
+                "utilisateur": utilisateur_id,
+                "statistique": statistique_id,
+                "type_statistique": stat_type,
+                "valeur": float(r["valeur"]["value"]) if "valeur" in r else 0,
+                "unite": r.get("unite", {}).get("value", "")
+            }
+            
+            # Ajouter des champs spécifiques selon le type
+            if stat_type == "StatistiquesPollution":
+                obs_data["tauxPollution"] = float(r["valeur"]["value"]) if "valeur" in r else 0
+            elif stat_type == "StatistiquesAccidents":
+                obs_data["nbreDaccident"] = int(r["valeur"]["value"]) if "valeur" in r else 0
+            
+            observations.append(obs_data)
+
+        print(f"✅ {len(observations)} observations trouvées")
+        return observations
+        
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des observations: {str(e)}")
+        return []
 # ======================
 # 🗑️ SUPPRESSION - ENDPOINTS
 # ======================
